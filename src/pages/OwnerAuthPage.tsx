@@ -160,7 +160,7 @@ export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticat
             <ShoppingBag className="h-5 w-5" />
           </div>
           <span className="font-display text-sm sm:text-lg font-bold text-[#1F2937] truncate">
-            Qusar-Shop
+            Qusar Ventures
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
