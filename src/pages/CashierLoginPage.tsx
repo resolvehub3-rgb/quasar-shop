@@ -118,7 +118,7 @@ export const CashierLoginPage: React.FC<CashierLoginPageProps> = ({ onCashierAut
               <ShoppingCart className="h-8 w-8 text-white" />
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-              Provision Shop
+              Qusar Ventures
             </h1>
             <p className="text-sm font-medium text-white/90 mt-1">
               Cashier Point of Sale Terminal
