@@ -1,0 +1,6 @@
+{
+  "name": "Provision Shop Manager",
+  "description": "Production-ready single-shop provision inventory, POS, Mobile Money, SMS, and accounting management system powered by Supabase.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
