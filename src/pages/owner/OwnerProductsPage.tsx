@@ -20,6 +20,7 @@ export const OwnerProductsPage: React.FC = () => {
   const [name, setName] = useState('');
   const [barcode, setBarcode] = useState('');
   const [sku, setSku] = useState('');
+  const [skuTouched, setSkuTouched] = useState(false);
   const [categoryId, setCategoryId] = useState('');
   const [baseUnitId, setBaseUnitId] = useState('');
   const [purchaseCost, setPurchaseCost] = useState('');
@@ -86,6 +87,7 @@ export const OwnerProductsPage: React.FC = () => {
     setName('');
     setBarcode('');
     setSku('');
+    setSkuTouched(false);
     setCategoryId(categories[0]?.id || '');
     setBaseUnitId(units[0]?.id || '');
     setPurchaseCost('');
@@ -102,6 +104,7 @@ export const OwnerProductsPage: React.FC = () => {
     setName(p.name);
     setBarcode(p.barcode || '');
     setSku(p.sku || '');
+    setSkuTouched(Boolean(p.sku));
     setCategoryId(p.category_id || '');
     setBaseUnitId(p.base_unit_id);
     setPurchaseCost(p.purchase_cost !== null ? String(p.purchase_cost) : '');
@@ -445,7 +448,20 @@ export const OwnerProductsPage: React.FC = () => {
                   type="text"
                   required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    const nextName = e.target.value;
+                    setName(nextName);
+                    if (!skuTouched) {
+                      setSku(
+                        nextName
+                          .trim()
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9]+/g, '-')
+                          .replace(/^-+|-+$/g, '')
+                          .slice(0, 24)
+                      );
+                    }
+                  }}
                   placeholder="e.g. Frytol Vegetable Oil (Litres)"
                   className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
                 />
@@ -465,7 +481,10 @@ export const OwnerProductsPage: React.FC = () => {
                   <input
                     type="text"
                     value={sku}
-                    onChange={(e) => setSku(e.target.value)}
+                    onChange={(e) => {
+                      setSku(e.target.value);
+                      setSkuTouched(true);
+                    }}
                     className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm font-mono"
                   />
                 </div>
