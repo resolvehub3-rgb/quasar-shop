@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, Lock, Mail, User, Phone, Store, ArrowRight, ShieldCheck, KeyRound } from 'lucide-react';
+import { ShoppingBag, Lock, Mail, User, Phone, Store, ArrowRight, ShieldCheck, KeyRound, Loader2 } from 'lucide-react';
 import { supabase, isSupabaseClientConfigured } from '../lib/supabaseClient';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
@@ -351,6 +351,7 @@ export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticat
                 disabled={loading}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#E60000] px-4 py-3 text-sm font-semibold text-white hover:bg-[#cc0000] disabled:opacity-60 transition-colors cursor-pointer"
               >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {loading ? 'Authenticating...' : mode === 'signin' ? 'Sign In to Owner Console' : 'Create Owner & Initialize Shop'}
                 <ArrowRight className="h-4 w-4" />
               </button>

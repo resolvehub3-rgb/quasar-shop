@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Delete, LogIn, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { ShoppingCart, Delete, LogIn, ShieldCheck, ArrowLeft, Loader2 } from 'lucide-react';
 import type { CashierShift } from '../types/database';
 
 export interface CashierAuthSession {
@@ -214,7 +214,7 @@ export const CashierLoginPage: React.FC<CashierLoginPageProps> = ({ onCashierAut
                 onClick={() => submitPin(code)}
                 className="h-14 rounded-xl bg-[#E60000] text-white font-semibold text-sm flex flex-col items-center justify-center gap-0.5 hover:bg-[#cc0000] disabled:opacity-50 active:scale-[0.97] transition cursor-pointer"
               >
-                <LogIn className="h-4 w-4" />
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                 <span>{loading ? '...' : 'Login'}</span>
               </button>
             </div>

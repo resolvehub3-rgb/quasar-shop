@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, XCircle, KeyRound, UserPlus, Send, Save, ShieldAlert } from 'lucide-react';
+import { Check, XCircle, KeyRound, UserPlus, Send, Save, ShieldAlert, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { formatGHS } from '../../lib/posCalculations';
 import { PWAInstallButton } from '../../components/PWAInstallButton';
@@ -355,6 +355,8 @@ export const OwnerCashiersPage: React.FC = () => {
   const [revealedPin, setRevealedPin] = useState<{ name: string; pin: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadCashiers = useCallback(async () => {
     if (!supabase) {
@@ -378,47 +380,71 @@ export const OwnerCashiersPage: React.FC = () => {
     e.preventDefault();
     if (!supabase) return;
     setError(null);
-    const { data: sess } = await supabase.auth.getSession();
-    const token = sess.session?.access_token;
-    if (!token) return;
+    setCreating(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        setError('You must be signed in as the shop owner to register a cashier.');
+        return;
+      }
 
-    const resp = await fetch('/api/owner/cashiers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ fullName, phone }),
-    });
-    const json = await resp.json();
-    if (!resp.ok) {
-      setError(json.error || 'Could not register cashier');
-      return;
+      const resp = await fetch('/api/owner/cashiers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fullName, phone }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setError(json.error || 'Could not register cashier');
+        return;
+      }
+      if (!json?.cashier?.full_name || !json?.generatedAccessCode) {
+        setError('Cashier was created but the server response was incomplete. Please refresh and try again.');
+        return;
+      }
+      setRevealedPin({ name: json.cashier.full_name, pin: json.generatedAccessCode });
+      setFullName('');
+      setPhone('');
+      await loadCashiers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not register cashier');
+    } finally {
+      setCreating(false);
     }
-    setRevealedPin({ name: json.cashier.full_name, pin: json.generatedAccessCode });
-    setFullName('');
-    setPhone('');
-    await loadCashiers();
   };
 
   const handleCashierAction = async (id: string, name: string, action: 'reset_code' | 'suspend' | 'revoke' | 'activate') => {
     if (!supabase) return;
     setError(null);
-    const { data: sess } = await supabase.auth.getSession();
-    const token = sess.session?.access_token;
-    if (!token) return;
+    setActionLoading(`${id}:${action}`);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        setError('You must be signed in as the shop owner.');
+        return;
+      }
 
-    const resp = await fetch(`/api/owner/cashiers/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action }),
-    });
-    const json = await resp.json();
-    if (!resp.ok) {
-      setError(json.error || 'Action failed');
-      return;
+      const resp = await fetch(`/api/owner/cashiers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setError(json.error || 'Action failed');
+        return;
+      }
+      if (json.generatedAccessCode) {
+        setRevealedPin({ name, pin: json.generatedAccessCode });
+      }
+      await loadCashiers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setActionLoading(null);
     }
-    if (json.generatedAccessCode) {
-      setRevealedPin({ name, pin: json.generatedAccessCode });
-    }
-    await loadCashiers();
   };
 
   return (
@@ -476,9 +502,11 @@ export const OwnerCashiersPage: React.FC = () => {
         />
         <button
           type="submit"
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E60000] px-4 py-2 text-xs font-semibold text-white hover:bg-[#cc0000] cursor-pointer"
+          disabled={creating}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E60000] px-4 py-2 text-xs font-semibold text-white hover:bg-[#cc0000] disabled:opacity-60 cursor-pointer"
         >
-          <UserPlus className="h-4 w-4" /> Register Cashier & Generate Code
+          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}{' '}
+          {creating ? 'Registering...' : 'Register Cashier & Generate Code'}
         </button>
       </form>
 
@@ -500,10 +528,16 @@ export const OwnerCashiersPage: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
+                    disabled={actionLoading === `${c.id}:reset_code`}
                     onClick={() => handleCashierAction(c.id, c.full_name, 'reset_code')}
-                    className="inline-flex items-center gap-1 rounded-lg border border-[#E5E7EB] px-3 py-1.5 font-semibold hover:bg-[#F3F4F6] cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-[#E5E7EB] px-3 py-1.5 font-semibold hover:bg-[#F3F4F6] disabled:opacity-60 cursor-pointer"
                   >
-                    <KeyRound className="h-3.5 w-3.5 text-[#E60000]" /> Reset Code
+                    {actionLoading === `${c.id}:reset_code` ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#E60000]" />
+                    ) : (
+                      <KeyRound className="h-3.5 w-3.5 text-[#E60000]" />
+                    )}{' '}
+                    Reset Code
                   </button>
                   {c.status === 'active' ? (
                     <>
