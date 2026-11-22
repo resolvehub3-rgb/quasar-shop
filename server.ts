@@ -344,6 +344,14 @@ function createApp() {
     return res.status(201).json({ ok: true, isOwner: true });
   });
 
+  // Public status used by the auth screen to hide first-run setup once claimed
+  app.get('/api/owner/bootstrap/status', async (_req: Request, res: Response) => {
+    const admin = getAdminClient();
+    if (!admin) return res.status(503).json({ error: 'Supabase server credentials are not configured.' });
+    const { data } = await admin.from('owner_profiles').select('id').limit(1);
+    return res.json({ claimed: (data || []).length > 0 });
+  });
+
   // ==========================================================================
   // OWNER-ONLY ENDPOINTS
   // ==========================================================================

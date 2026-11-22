@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, Lock, Mail, User, Phone, Store, ArrowRight, ShieldCheck, KeyRound } from 'lucide-react';
 import { supabase, isSupabaseClientConfigured } from '../lib/supabaseClient';
@@ -11,6 +11,7 @@ interface OwnerAuthPageProps {
 export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticated }) => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'signin' | 'register'>('signin');
+  const [shopClaimed, setShopClaimed] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -19,6 +20,26 @@ export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticat
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch('/api/owner/bootstrap/status');
+        if (!resp.ok) return;
+        const json = await resp.json();
+        if (!cancelled && json?.claimed) {
+          setShopClaimed(true);
+          setMode('signin');
+        }
+      } catch {
+        // Ignore; default to showing setup option.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,32 +186,34 @@ export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticat
                     : 'First-run setup for the single authorized shop owner'}
                 </p>
               </div>
-              <div className="flex self-start sm:self-auto shrink-0 rounded-lg bg-[#F3F4F6] p-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('signin');
-                    setError(null);
-                  }}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                    mode === 'signin' ? 'bg-white text-[#1F2937] shadow-sm' : 'text-[#6B7280]'
-                  }`}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('register');
-                    setError(null);
-                  }}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                    mode === 'register' ? 'bg-white text-[#1F2937] shadow-sm' : 'text-[#6B7280]'
-                  }`}
-                >
-                  First Setup
-                </button>
-              </div>
+              {!shopClaimed && (
+                <div className="flex self-start sm:self-auto shrink-0 rounded-lg bg-[#F3F4F6] p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('signin');
+                      setError(null);
+                    }}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                      mode === 'signin' ? 'bg-white text-[#1F2937] shadow-sm' : 'text-[#6B7280]'
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('register');
+                      setError(null);
+                    }}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                      mode === 'register' ? 'bg-white text-[#1F2937] shadow-sm' : 'text-[#6B7280]'
+                    }`}
+                  >
+                    First Setup
+                  </button>
+                </div>
+              )}
             </div>
 
             {error && (
