@@ -11,7 +11,13 @@ interface OwnerAuthPageProps {
 export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticated }) => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'signin' | 'register'>('signin');
-  const [shopClaimed, setShopClaimed] = useState(false);
+  const [shopClaimed, setShopClaimed] = useState(() => {
+    try {
+      return localStorage.getItem('shopClaimed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -71,6 +77,12 @@ export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticat
             await supabase.auth.signOut();
             throw new Error(bootJson.error || 'Account is not authorized as the shop owner.');
           }
+          try {
+            localStorage.setItem('shopClaimed', 'true');
+          } catch {
+            // Ignore storage errors.
+          }
+          setShopClaimed(true);
           await onOwnerAuthenticated();
           navigate('/owner/dashboard');
         }
@@ -102,9 +114,21 @@ export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticat
           if (!bootResp.ok) {
             throw new Error(bootJson.error || 'Could not claim shop ownership.');
           }
+          try {
+            localStorage.setItem('shopClaimed', 'true');
+          } catch {
+            // Ignore storage errors.
+          }
+          setShopClaimed(true);
           await onOwnerAuthenticated();
           navigate('/owner/dashboard');
         } else {
+          try {
+            localStorage.setItem('shopClaimed', 'true');
+          } catch {
+            // Ignore storage errors.
+          }
+          setShopClaimed(true);
           setInfoMessage('Account created. Please confirm your email address, then sign in to complete shop setup.');
           setMode('signin');
         }
