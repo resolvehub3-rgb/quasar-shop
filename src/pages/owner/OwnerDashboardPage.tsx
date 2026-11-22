@@ -21,6 +21,55 @@ import type { Product, SaleRecord, ExpenseRecord, CashierShift, Supplier } from 
 
 type DateRange = 'today' | '7d' | '30d';
 
+const MiniSparkline: React.FC<{ data: number[]; delay?: number }> = ({ data, delay = 0 }) => {
+  const max = Math.max(1, ...data);
+  const n = data.length || 1;
+  const points = data
+    .map((v, i) => {
+      const x = n > 1 ? (i / (n - 1)) * 100 : 50;
+      const y = 36 - (v / max) * 28;
+      return `${x},${y}`;
+    })
+    .join(' ');
+  return (
+    <svg viewBox="0 0 100 40" className="w-full h-12 overflow-visible" preserveAspectRatio="none">
+      <polyline
+        fill="none"
+        stroke="rgba(255,255,255,0.25)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+      <polyline
+        className="animate-draw-line"
+        fill="none"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+        style={{ strokeDasharray: 1000, strokeDashoffset: 1000, animationDelay: `${delay}ms` }}
+      />
+      {data.map((v, i) => {
+        const x = n > 1 ? (i / (n - 1)) * 100 : 50;
+        const y = 36 - (v / max) * 28;
+        return (
+          <circle
+            key={i}
+            cx={x}
+            cy={y}
+            r="2.2"
+            fill="white"
+            className="animate-pop-in"
+            style={{ animationDelay: `${delay + i * 60}ms`, transformOrigin: `${x}px ${y}px` }}
+          />
+        );
+      })}
+    </svg>
+  );
+};
+
 export const OwnerDashboardPage: React.FC = () => {
   const [range, setRange] = useState<DateRange>('today');
   const [loading, setLoading] = useState(true);
@@ -202,14 +251,33 @@ export const OwnerDashboardPage: React.FC = () => {
     const supplierBalanceTotal = suppliers.reduce((sum, s) => sum + Number(s.outstanding_balance), 0);
 
     // 7-day chart buckets
-    const chartDays: Array<{ label: string; sales: number; expenses: number }> = [];
+    const chartDays: Array<{ label: string; sales: number; expenses: number; cash: number; momo: number }> = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
-      const daySales = sales
-        .filter((s) => s.created_at.slice(0, 10) === key && s.payment_status === 'paid')
-        .reduce((a, b) => a + Number(b.total_amount), 0);
+      const daySaleRecords = sales.filter(
+        (s) =>
+          s.created_at.slice(0, 10) === key &&
+          ['paid', 'partial', 'partially_refunded'].includes(s.payment_status)
+      );
+      const daySales = daySaleRecords.reduce((a, b) => a + Number(b.total_amount), 0);
+      const dayCash = daySaleRecords.reduce(
+        (sum, s) =>
+          sum +
+          (s.payments || [])
+            .filter((p) => p.status === 'successful' && p.method === 'cash')
+            .reduce((a, p) => a + Number(p.amount), 0),
+        0
+      );
+      const dayMomo = daySaleRecords.reduce(
+        (sum, s) =>
+          sum +
+          (s.payments || [])
+            .filter((p) => p.status === 'successful' && p.method === 'momo')
+            .reduce((a, p) => a + Number(p.amount), 0),
+        0
+      );
       const dayExp = expenses
         .filter((e) => e.created_at.slice(0, 10) === key)
         .reduce((a, b) => a + Number(b.amount), 0);
@@ -217,6 +285,8 @@ export const OwnerDashboardPage: React.FC = () => {
         label: d.toLocaleDateString('en-US', { weekday: 'short' }),
         sales: daySales,
         expenses: dayExp,
+        cash: dayCash,
+        momo: dayMomo,
       });
     }
 
@@ -279,55 +349,108 @@ export const OwnerDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* KPI Row 1 (4 cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="rounded-xl bg-white border border-[#E5E7EB] p-4 flex items-center gap-4">
-          <div className="h-11 w-11 rounded-full bg-[#E60000]/10 text-[#E60000] flex items-center justify-center shrink-0">
-            <ShoppingCart className="h-5 w-5" />
+      {products.some((p) => p.purchase_cost === null || p.purchase_cost === undefined) && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Some products have no Purchase Cost, so profit tracking is disabled. Set purchase costs, then run
+            <code className="mx-1 rounded bg-amber-100 px-1">supabase/migrations/005_backfill_cost_basis.sql</code>
+            to backfill historical sales.
+          </span>
+          <Link to="/owner/products" className="font-semibold text-amber-900 hover:underline">
+            Manage Products →
+          </Link>
+        </div>
+      )}
+
+      {/* KPI Row 1 (4 colorful animated cards with charts) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {/* Today's Sales */}
+        <div
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#E60000] via-[#ff3b3b] to-[#ff7a59] p-4 text-white shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl animate-fade-in-up"
+          style={{ animationDelay: '0ms' }}
+        >
+          <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/15 blur-2xl transition-transform duration-500 group-hover:scale-125" />
+          <div className="relative flex items-start justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white/85">
+                {range === 'today' ? "Today's Sales" : range === '7d' ? '7-Day Sales' : '30-Day Sales'}
+              </p>
+              <p className="mt-1 font-display text-2xl font-bold tabular-nums truncate">
+                {loading ? '...' : formatGHS(metrics.totalSales)}
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+              <ShoppingCart className="h-5 w-5" />
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[#6B7280]">
-              {range === 'today' ? "Today's Sales" : range === '7d' ? '7-Day Sales' : '30-Day Sales'}
-            </p>
-            <p className="font-display text-xl font-bold text-[#1F2937] tabular-nums truncate">
-              {loading ? '...' : formatGHS(metrics.totalSales)}
-            </p>
+          <div className="relative mt-3 h-12">
+            <MiniSparkline data={metrics.chartDays.map((d) => d.sales)} delay={0} />
           </div>
         </div>
 
-        <div className="rounded-xl bg-white border border-[#E5E7EB] p-4 flex items-center gap-4">
-          <div className="h-11 w-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-            <Banknote className="h-5 w-5" />
+        {/* Cash Sales */}
+        <div
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 via-emerald-400 to-teal-500 p-4 text-white shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl animate-fade-in-up"
+          style={{ animationDelay: '80ms' }}
+        >
+          <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/15 blur-2xl transition-transform duration-500 group-hover:scale-125" />
+          <div className="relative flex items-start justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white/85">Cash Sales</p>
+              <p className="mt-1 font-display text-2xl font-bold tabular-nums truncate">
+                {loading ? '...' : formatGHS(metrics.cashSales)}
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+              <Banknote className="h-5 w-5" />
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[#6B7280]">Cash Sales</p>
-            <p className="font-display text-xl font-bold text-[#1F2937] tabular-nums truncate">
-              {loading ? '...' : formatGHS(metrics.cashSales)}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-xl bg-white border border-[#E5E7EB] p-4 flex items-center gap-4">
-          <div className="h-11 w-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-            <Smartphone className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[#6B7280]">MoMo Sales</p>
-            <p className="font-display text-xl font-bold text-[#1F2937] tabular-nums truncate">
-              {loading ? '...' : formatGHS(metrics.momoSales)}
-            </p>
+          <div className="relative mt-3 h-12">
+            <MiniSparkline data={metrics.chartDays.map((d) => d.cash)} delay={80} />
           </div>
         </div>
 
-        <div className="rounded-xl bg-white border border-[#E5E7EB] p-4 flex items-center gap-4">
-          <div className="h-11 w-11 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-            <Wallet className="h-5 w-5" />
+        {/* MoMo Sales */}
+        <div
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-500 p-4 text-white shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl animate-fade-in-up"
+          style={{ animationDelay: '160ms' }}
+        >
+          <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/15 blur-2xl transition-transform duration-500 group-hover:scale-125" />
+          <div className="relative flex items-start justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white/85">MoMo Sales</p>
+              <p className="mt-1 font-display text-2xl font-bold tabular-nums truncate">
+                {loading ? '...' : formatGHS(metrics.momoSales)}
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+              <Smartphone className="h-5 w-5" />
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[#6B7280]">Expenses</p>
-            <p className="font-display text-xl font-bold text-[#1F2937] tabular-nums truncate">
-              {loading ? '...' : formatGHS(metrics.totalExpenses)}
-            </p>
+          <div className="relative mt-3 h-12">
+            <MiniSparkline data={metrics.chartDays.map((d) => d.momo)} delay={160} />
+          </div>
+        </div>
+
+        {/* Expenses */}
+        <div
+          className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-500 to-fuchsia-500 p-4 text-white shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl animate-fade-in-up"
+          style={{ animationDelay: '240ms' }}
+        >
+          <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/15 blur-2xl transition-transform duration-500 group-hover:scale-125" />
+          <div className="relative flex items-start justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white/85">Expenses</p>
+              <p className="mt-1 font-display text-2xl font-bold tabular-nums truncate">
+                {loading ? '...' : formatGHS(metrics.totalExpenses)}
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+              <Wallet className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="relative mt-3 h-12">
+            <MiniSparkline data={metrics.chartDays.map((d) => d.expenses)} delay={240} />
           </div>
         </div>
       </div>
@@ -344,6 +467,11 @@ export const OwnerDashboardPage: React.FC = () => {
               ? formatGHS(metrics.estimatedGrossProfit)
               : 'Cost basis unavailable'}
           </p>
+          {metrics.estimatedGrossProfit === null && (
+            <Link to="/owner/products" className="mt-1 inline-block text-[11px] font-semibold text-[#E60000] hover:underline">
+              Set Purchase Cost on products →
+            </Link>
+          )}
         </div>
 
         <div className="rounded-xl bg-white border border-[#E5E7EB] p-4">
@@ -356,6 +484,11 @@ export const OwnerDashboardPage: React.FC = () => {
               ? formatGHS(metrics.estimatedNetProfit)
               : 'Cost basis unavailable'}
           </p>
+          {metrics.estimatedNetProfit === null && (
+            <Link to="/owner/products" className="mt-1 inline-block text-[11px] font-semibold text-[#E60000] hover:underline">
+              Set Purchase Cost on products →
+            </Link>
+          )}
         </div>
 
         <div className="rounded-xl bg-white border border-[#E5E7EB] p-4">

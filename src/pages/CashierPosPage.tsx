@@ -10,7 +10,6 @@ import {
   Trash2,
   Banknote,
   Smartphone,
-  Split,
   LogOut,
   ReceiptText,
   RotateCcw,
@@ -81,9 +80,8 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
   const [discountInput, setDiscountInput] = useState('0');
 
   // Payment State (Cash MUST be default)
-  const [paymentMode, setPaymentMode] = useState<'cash' | 'momo' | 'split'>('cash');
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'momo'>('cash');
   const [cashTendered, setCashTendered] = useState('');
-  const [splitCashAmount, setSplitCashAmount] = useState('');
   const [momoPhone, setMomoPhone] = useState('');
   const [momoNetwork, setMomoNetwork] = useState<'MTN' | 'TELECEL' | 'AT'>('MTN');
   const [processingSale, setProcessingSale] = useState(false);
@@ -199,7 +197,6 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
             setCart([]);
             setDiscountInput('0');
             setCashTendered('');
-            setSplitCashAmount('');
             setPaymentMode('cash');
             if (data.receipt?.snapshot_json) {
               setCompletedReceipt(data.receipt.snapshot_json);
@@ -300,19 +297,9 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
     );
   }, [cart, discountInput]);
 
-  const cashNeeded =
-    paymentMode === 'cash'
-      ? cartTotals.totalAmount
-      : paymentMode === 'split'
-      ? Math.max(0, Number(splitCashAmount) || 0)
-      : 0;
+  const cashNeeded = paymentMode === 'cash' ? cartTotals.totalAmount : 0;
 
-  const momoNeeded =
-    paymentMode === 'momo'
-      ? cartTotals.totalAmount
-      : paymentMode === 'split'
-      ? Math.max(0, Math.round((cartTotals.totalAmount - cashNeeded) * 100) / 100)
-      : 0;
+  const momoNeeded = paymentMode === 'momo' ? cartTotals.totalAmount : 0;
 
   const cashCalc = useMemo(
     () => calculateCashChange(cashNeeded, Number(cashTendered) || 0),
@@ -463,7 +450,6 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
         setCart([]);
         setDiscountInput('0');
         setCashTendered('');
-        setSplitCashAmount('');
         setPaymentMode('cash');
         if (saleData.receipt?.snapshot_json) {
           setCompletedReceipt(saleData.receipt.snapshot_json);
@@ -1127,28 +1113,6 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
                         </div>
                       </label>
 
-                      <label
-                        className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-colors ${
-                          paymentMode === 'split'
-                            ? 'border-[#E60000] bg-red-50/30'
-                            : 'border-[#E5E7EB] hover:bg-[#F9FAFB]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name="pos-payment-method"
-                            checked={paymentMode === 'split'}
-                            onChange={() => setPaymentMode('split')}
-                            className="accent-[#E60000]"
-                          />
-                          <Split className="h-5 w-5 text-blue-600" />
-                          <div>
-                            <p className="text-sm font-bold text-[#1F2937]">Split Payment</p>
-                            <p className="text-[11px] text-[#6B7280]">Combine Cash + MoMo Pay</p>
-                          </div>
-                        </div>
-                      </label>
                     </div>
 
                     {/* Discount */}
@@ -1169,29 +1133,7 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
                       </div>
                     )}
 
-                    {/* Split Cash Allocation */}
-                    {paymentMode === 'split' && (
-                      <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 space-y-2">
-                        <label htmlFor="split-cash-input" className="block text-xs font-semibold text-[#1F2937]">
-                          Cash Component (GH₵)
-                        </label>
-                        <input
-                          id="split-cash-input"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max={cartTotals.totalAmount}
-                          value={splitCashAmount}
-                          onChange={(e) => setSplitCashAmount(e.target.value)}
-                          placeholder="e.g. 50.00"
-                          className="w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm font-semibold tabular-nums"
-                        />
-                        <div className="flex justify-between text-xs text-[#6B7280]">
-                          <span>Remaining via MoMo:</span>
-                          <span className="font-bold text-[#1F2937] tabular-nums">{formatGHS(momoNeeded)}</span>
-                        </div>
-                      </div>
-                    )}
+
 
                     {/* Cash Tendered & Change */}
                     {cashNeeded > 0 && (

@@ -42,6 +42,7 @@ export const CashierLoginPage: React.FC<CashierLoginPageProps> = ({ onCashierAut
         onCashierAuthenticated(data);
         navigate('/cashier/pos');
       } catch (err) {
+        setCode('');
         setError(err instanceof Error ? err.message : 'Unable to verify code');
       } finally {
         setLoading(false);
@@ -64,6 +65,13 @@ export const CashierLoginPage: React.FC<CashierLoginPageProps> = ({ onCashierAut
     setError(null);
     setCode((prev) => prev.slice(0, -1));
   }, [loading]);
+
+  // Automatically submit as soon as all 6 digits have been entered.
+  useEffect(() => {
+    if (code.length === 6 && !loading) {
+      submitPin(code);
+    }
+  }, [code, loading, submitPin]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

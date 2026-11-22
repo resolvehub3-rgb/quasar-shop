@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, ScanBarcode, Camera, Plus, Minus, Trash2, Banknote, Smartphone, Split } from 'lucide-react';
+import { Search, ScanBarcode, Camera, Plus, Minus, Trash2, Banknote, Smartphone } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import type { Product, ReceiptSnapshot, ShopSettings } from '../../types/database';
 import { calculateCartTotals, calculateCashChange, formatGHS } from '../../lib/posCalculations';
@@ -27,9 +27,8 @@ export const OwnerPosPage: React.FC = () => {
   const [discountInput, setDiscountInput] = useState('0');
 
   // Cash default
-  const [paymentMode, setPaymentMode] = useState<'cash' | 'momo' | 'split'>('cash');
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'momo'>('cash');
   const [cashTendered, setCashTendered] = useState('');
-  const [splitCashAmount, setSplitCashAmount] = useState('');
   const [momoPhone, setMomoPhone] = useState('');
   const [momoNetwork, setMomoNetwork] = useState<'MTN' | 'TELECEL' | 'AT'>('MTN');
   const [processing, setProcessing] = useState(false);
@@ -64,7 +63,7 @@ export const OwnerPosPage: React.FC = () => {
         setPendingMomoRef(null);
         setCart([]);
         setCashTendered('');
-        setSplitCashAmount('');
+
         setPaymentMode('cash');
         if (data.receipt?.snapshot_json) setCompletedReceipt(data.receipt.snapshot_json);
         loadProducts();
@@ -138,18 +137,8 @@ export const OwnerPosPage: React.FC = () => {
     [cart, discountInput]
   );
 
-  const cashNeeded =
-    paymentMode === 'cash'
-      ? totals.totalAmount
-      : paymentMode === 'split'
-      ? Math.max(0, Number(splitCashAmount) || 0)
-      : 0;
-  const momoNeeded =
-    paymentMode === 'momo'
-      ? totals.totalAmount
-      : paymentMode === 'split'
-      ? Math.max(0, Math.round((totals.totalAmount - cashNeeded) * 100) / 100)
-      : 0;
+  const cashNeeded = paymentMode === 'cash' ? totals.totalAmount : 0;
+  const momoNeeded = paymentMode === 'momo' ? totals.totalAmount : 0;
   const cashCalc = calculateCashChange(cashNeeded, Number(cashTendered) || 0);
 
   const handleCheckout = async () => {
@@ -215,7 +204,7 @@ export const OwnerPosPage: React.FC = () => {
         setCart([]);
         setDiscountInput('0');
         setCashTendered('');
-        setSplitCashAmount('');
+
         setPaymentMode('cash');
         await loadProducts();
       }
@@ -387,7 +376,6 @@ export const OwnerPosPage: React.FC = () => {
               {[
                 { id: 'cash', label: 'Cash (Default)', icon: Banknote },
                 { id: 'momo', label: 'MoMo Pay (Optional)', icon: Smartphone },
-                { id: 'split', label: 'Split Payment (Cash + MoMo)', icon: Split },
               ].map(({ id, label, icon: Icon }) => (
                 <label
                   key={id}
@@ -399,7 +387,7 @@ export const OwnerPosPage: React.FC = () => {
                     type="radio"
                     name="owner-pos-method"
                     checked={paymentMode === id}
-                    onChange={() => setPaymentMode(id as 'cash' | 'momo' | 'split')}
+                    onChange={() => setPaymentMode(id as 'cash' | 'momo')}
                     className="accent-[#E60000]"
                   />
                   <Icon className="h-4 w-4 text-[#1F2937]" />
@@ -420,19 +408,6 @@ export const OwnerPosPage: React.FC = () => {
                 className="w-28 rounded-lg border border-[#E5E7EB] px-2.5 py-1.5 text-right font-semibold tabular-nums"
               />
             </div>
-
-            {paymentMode === 'split' && (
-              <div>
-                <label className="block text-xs font-semibold mb-1">Cash Component (GH₵)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={splitCashAmount}
-                  onChange={(e) => setSplitCashAmount(e.target.value)}
-                  className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm tabular-nums"
-                />
-              </div>
-            )}
 
             {cashNeeded > 0 && (
               <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 space-y-2">

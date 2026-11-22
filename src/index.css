@@ -22,6 +22,40 @@
   font-variant-numeric: tabular-nums;
 }
 
+@keyframes grow-up {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.animate-grow-up {
+  animation: grow-up 0.9s ease-out both;
+  transform-origin: bottom;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out both;
+}
+
+@keyframes draw-line {
+  to { stroke-dashoffset: 0; }
+}
+.animate-draw-line {
+  animation: draw-line 1.2s ease-out forwards;
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-pop-in {
+  animation: pop-in 0.4s ease-out both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 /* Thermal receipt print styles (58mm and 80mm support) */
 @media print {
   body * {

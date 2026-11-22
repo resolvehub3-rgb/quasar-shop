@@ -3,6 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import crypto from 'crypto';
 import path from 'path';
+import os from 'os';
 import fs from 'fs';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
@@ -208,7 +209,7 @@ async function requireCashier(req: AuthedCashierRequest, res: Response, next: Ne
   next();
 }
 
-async function startServer() {
+function createApp() {
   const app = express();
   app.set('trust proxy', true);
 
@@ -1106,6 +1107,14 @@ async function startServer() {
     return res.status(201).json({ ok: true, expense: result, smsResult });
   });
 
+  return app;
+}
+
+const app = createApp();
+export default app;
+export { app };
+
+async function startServer() {
   const httpServer = http.createServer(app);
 
   // ==========================================================================
@@ -1115,6 +1124,7 @@ async function startServer() {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
+        host: true,
         middlewareMode: true,
         hmr: false,
         watch: null,
@@ -1138,8 +1148,15 @@ async function startServer() {
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
+    const networkIps = Object.values(os.networkInterfaces())
+      .flat()
+      .filter((iface): iface is os.NetworkInterfaceInfo => Boolean(iface && iface.family === 'IPv4' && !iface.internal))
+      .map((iface) => iface.address);
     console.log(`Provision Shop server listening on http://localhost:${PORT}`);
+    networkIps.forEach((ip) => console.log(`  Mobile/Network access: http://${ip}:${PORT}`));
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
