@@ -722,41 +722,11 @@ export const OwnerSmsPage: React.FC = () => {
         </p>
       </div>
 
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
-        <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
-        <div>
-          <strong>SasuSync Integration Status:</strong> Live SMS delivery requires setting{' '}
-          <code className="font-mono">SASUSYNC_API_ENDPOINT</code> and <code className="font-mono">SASUSYNC_API_KEY</code>{' '}
-          from your official SasuSync developer portal on the server/Edge Functions. Unconfigured sends are logged honestly as{' '}
-          <code className="font-mono">blocked_missing_config</code>.
-        </div>
-      </div>
-
       {statusMsg && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">{statusMsg}</div>}
 
       {config && (
         <form onSubmit={handleSaveConfig} className="rounded-xl bg-white border border-[#E5E7EB] p-5 space-y-4 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block font-semibold mb-1">Owner Alert Phone</label>
-              <input
-                type="tel"
-                value={config.owner_phone}
-                onChange={(e) => setConfig({ ...config, owner_phone: e.target.value })}
-                placeholder="23324XXXXXXX"
-                className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold mb-1">Sender ID</label>
-              <input
-                type="text"
-                value={config.sender_id}
-                onChange={(e) => setConfig({ ...config, sender_id: e.target.value })}
-                placeholder="ShopPOS"
-                className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2"
-              />
-            </div>
             <div>
               <label className="block font-semibold mb-1">Scheduled Report Frequency</label>
               <select
