@@ -777,9 +777,7 @@ export const OwnerSmsPage: React.FC = () => {
             <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-[#E60000] px-4 py-2 font-semibold text-white cursor-pointer">
               <Save className="h-4 w-4" /> Save SMS Settings
             </button>
-            <button type="button" onClick={handleTestSms} className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] px-4 py-2 font-semibold cursor-pointer">
-              <Send className="h-4 w-4 text-[#E60000]" /> Send Real Test SMS
-            </button>
+
           </div>
         </form>
       )}
