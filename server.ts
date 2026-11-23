@@ -747,7 +747,7 @@ function createApp() {
     const admin = getAdminClient()!;
     const { data: products, error: prodErr } = await admin
       .from('products')
-      .select('id, name, sku, barcode, category_id, selling_price, stock_quantity, min_stock_level, expiry_date, is_archived, base_unit_id, measurement_units(code, name, allow_decimal), categories(name), product_unit_conversions(*), product_barcodes(barcode, unit_conversion_id)')
+      .select('id, name, sku, barcode, category_id, selling_price, stock_quantity, min_stock_level, expiry_date, is_archived, base_unit_id, image_path, measurement_units(code, name, allow_decimal), categories(name), product_unit_conversions(*), product_barcodes(barcode, unit_conversion_id)')
       .eq('is_archived', false)
       .order('name');
 
@@ -779,7 +779,23 @@ function createApp() {
       shiftExpenses = eData || [];
     }
 
-    return res.json({ products: products || [], shiftSales, shiftExpenses });
+    const productList = products || [];
+    const imagePaths = productList.map((p: any) => p.image_path).filter(Boolean);
+    let signedUrlMap = new Map<string, string>();
+    if (imagePaths.length > 0) {
+      const { data: signedUrls } = await admin.storage.from('product-images').createSignedUrls(imagePaths, 3600);
+      if (signedUrls) {
+        signedUrls.forEach((item: any) => {
+          if (item.path && item.signedUrl) signedUrlMap.set(item.path, item.signedUrl);
+        });
+      }
+    }
+    const productsWithImages = productList.map((p: any) => ({
+      ...p,
+      image_url: p.image_path ? signedUrlMap.get(p.image_path) || null : null,
+    }));
+
+    return res.json({ products: productsWithImages, shiftSales, shiftExpenses });
   });
 
   app.post('/api/cashier/sales', requireCashier, async (req: AuthedCashierRequest, res: Response) => {

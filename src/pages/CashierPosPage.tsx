@@ -893,6 +893,13 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
                                 : 'border-[#E5E7EB] bg-white hover:border-[#E60000] hover:bg-red-50/20'
                             }`}
                           >
+                            {(product as any).image_url && (
+                              <img
+                                src={(product as any).image_url}
+                                alt={product.name}
+                                className="mb-2 h-16 w-full rounded-lg object-cover"
+                              />
+                            )}
                             <p className="text-xs font-bold text-[#1F2937] line-clamp-2 min-h-[32px]">
                               {product.name}
                             </p>
