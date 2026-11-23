@@ -32,8 +32,29 @@ export default function App() {
   const [shopName, setShopName] = useState('Provision Shop');
   const [shopTagline, setShopTagline] = useState('Manage · Sell · Grow');
 
-  // Cashier session held in React memory (never localStorage) for security
-  const [cashierSession, setCashierSession] = useState<CashierAuthSession | null>(null);
+  // Cashier session is kept in sessionStorage so a page refresh does not log the
+  // cashier out, while still being cleared when the tab/browser is closed.
+  const [cashierSession, setCashierSessionState] = useState<CashierAuthSession | null>(() => {
+    try {
+      const raw = sessionStorage.getItem('cashierSession');
+      return raw ? (JSON.parse(raw) as CashierAuthSession) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setCashierSession = useCallback((next: CashierAuthSession | null) => {
+    setCashierSessionState(next);
+    try {
+      if (next) {
+        sessionStorage.setItem('cashierSession', JSON.stringify(next));
+      } else {
+        sessionStorage.removeItem('cashierSession');
+      }
+    } catch {
+      // Ignore storage errors (e.g. private mode).
+    }
+  }, []);
 
   const refreshOwnerState = useCallback(async () => {
     if (!supabase) {
