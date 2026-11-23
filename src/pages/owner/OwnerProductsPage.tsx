@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, Search, Archive, Scale, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, Search, Archive, Scale, SlidersHorizontal, X, Loader2, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { formatGHS } from '../../lib/posCalculations';
 import { evaluateStockAlert } from '../../lib/inventoryMath';
@@ -29,6 +29,10 @@ export const OwnerProductsPage: React.FC = () => {
   const [minStockLevel, setMinStockLevel] = useState('5');
   const [expiryDate, setExpiryDate] = useState('');
   const [description, setDescription] = useState('');
+  const [imagePath, setImagePath] = useState<string | null>(null);
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // New Category inline
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -96,6 +100,9 @@ export const OwnerProductsPage: React.FC = () => {
     setMinStockLevel('5');
     setExpiryDate('');
     setDescription('');
+    setImagePath(null);
+    setProductImageFile(null);
+    setImagePreviewUrl(null);
     setShowProductForm(true);
   };
 
@@ -112,6 +119,17 @@ export const OwnerProductsPage: React.FC = () => {
     setMinStockLevel(String(p.min_stock_level));
     setExpiryDate(p.expiry_date || '');
     setDescription(p.description || '');
+    setImagePath(p.image_path || null);
+    setProductImageFile(null);
+    setImagePreviewUrl(null);
+    if (p.image_path && supabase) {
+      supabase.storage
+        .from('product-images')
+        .createSignedUrl(p.image_path, 3600)
+        .then(({ data }) => {
+          if (data?.signedUrl) setImagePreviewUrl(data.signedUrl);
+        });
+    }
     setShowProductForm(true);
   };
 
@@ -137,6 +155,14 @@ export const OwnerProductsPage: React.FC = () => {
           })
           .eq('id', editingProduct.id);
         if (updErr) throw updErr;
+        if (productImageFile && editingProduct && supabase) {
+          setUploadingImage(true);
+          const uploadPath = `${editingProduct.id}/${Date.now()}-${productImageFile.name}`;
+          const { error: upErr } = await supabase.storage.from('product-images').upload(uploadPath, productImageFile, { upsert: true });
+          if (upErr) throw upErr;
+          await supabase.from('products').update({ image_path: uploadPath }).eq('id', editingProduct.id);
+          setImagePath(uploadPath);
+        }
       } else {
         const { data: created, error: insErr } = await supabase
           .from('products')
@@ -170,6 +196,14 @@ export const OwnerProductsPage: React.FC = () => {
               p_description: 'Initial opening stock upon product registration',
             });
           }
+        }
+        if (productImageFile && created && supabase) {
+          setUploadingImage(true);
+          const uploadPath = `${created.id}/${Date.now()}-${productImageFile.name}`;
+          const { error: upErr } = await supabase.storage.from('product-images').upload(uploadPath, productImageFile, { upsert: true });
+          if (upErr) throw upErr;
+          await supabase.from('products').update({ image_path: uploadPath }).eq('id', created.id);
+          setImagePath(uploadPath);
         }
       }
       setShowProductForm(false);
@@ -570,12 +604,38 @@ export const OwnerProductsPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block font-semibold mb-1">Expiry Date</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                      className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('product-image-input')?.click()}
+                      className="shrink-0 rounded-lg bg-[#E60000] px-3 py-2 text-xs font-semibold text-white hover:bg-[#cc0000] cursor-pointer"
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? 'Uploading...' : 'Product Image'}
+                    </button>
+                  </div>
                   <input
-                    type="date"
-                    value={expiryDate}
-                    onChange={(e) => setExpiryDate(e.target.value)}
-                    className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+                    id="product-image-input"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setProductImageFile(file);
+                        setImagePreviewUrl(URL.createObjectURL(file));
+                      }
+                    }}
                   />
+                  {imagePreviewUrl && (
+                    <img src={imagePreviewUrl} alt="Product" className="mt-2 h-20 w-20 rounded-lg object-cover border border-[#E5E7EB]" />
+                  )}
                 </div>
               </div>
               <button
