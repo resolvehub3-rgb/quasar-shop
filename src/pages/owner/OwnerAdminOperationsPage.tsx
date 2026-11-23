@@ -462,10 +462,11 @@ export const OwnerCashiersPage: React.FC = () => {
         <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-bold text-emerald-900">
-              One-Time 6-Digit Access Code for {revealedPin.name}
+              6-Digit Access Code for {revealedPin.name}
             </p>
             <p className="text-xs text-emerald-800 mt-0.5">
-              Copy and share this code securely now. For security, it cannot be viewed again once dismissed.
+              This code stays the cashier's login code until you reset it. Copy and share it securely now; for
+              security it cannot be viewed again once dismissed.
             </p>
           </div>
           <div className="flex items-center gap-3">
