@@ -71,6 +71,10 @@ async function dispatchSasuSyncSms(
   const apiKey = process.env.SASUSYNC_API_KEY;
   const senderId = process.env.SASUSYNC_SENDER_ID || 'ShopPOS';
 
+  // Normalize local Ghana numbers (0XXXXXXXXX) to international format (233XXXXXXXXX).
+  const rawPhone = String(params.recipientPhone || '').trim().replace(/^\+/, '');
+  const recipientPhone = rawPhone.startsWith('0') ? `233${rawPhone.slice(1)}` : rawPhone;
+
   if (!params.recipientPhone) {
     return { delivered: false, status: 'skipped_no_recipient' };
   }
@@ -78,7 +82,7 @@ async function dispatchSasuSyncSms(
   if (!endpoint || !apiKey) {
     await admin.from('sms_logs').insert({
       event_type: params.eventType,
-      recipient_phone: params.recipientPhone,
+      recipient_phone: recipientPhone,
       message_body: params.messageBody,
       provider: 'sasusync',
       status: 'blocked_missing_config',
@@ -101,7 +105,7 @@ async function dispatchSasuSyncSms(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        to: params.recipientPhone,
+        to: recipientPhone,
         sender: senderId,
         message: params.messageBody,
       }),

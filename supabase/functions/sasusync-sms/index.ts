@@ -13,11 +13,13 @@ Deno.serve(async (req) => {
   const senderId = Deno.env.get('SASUSYNC_SENDER_ID') || 'ShopPOS';
 
   const { eventType, recipientPhone, messageBody, relatedEntityType, relatedEntityId } = await req.json();
+  const rawPhone = String(recipientPhone || '').trim().replace(/^\+/, '');
+  const normalizedRecipientPhone = rawPhone.startsWith('0') ? `233${rawPhone.slice(1)}` : rawPhone;
 
   if (!endpoint || !apiKey) {
     await supabase.from('sms_logs').insert({
       event_type: eventType || 'manual_test',
-      recipient_phone: recipientPhone || '',
+      recipient_phone: normalizedRecipientPhone || '',
       message_body: messageBody || '',
       provider: 'sasusync',
       status: 'blocked_missing_config',
@@ -38,14 +40,14 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ to: recipientPhone, sender: senderId, message: messageBody }),
+      body: JSON.stringify({ to: normalizedRecipientPhone, sender: senderId, message: messageBody }),
     });
     const data = await resp.json().catch(() => ({}));
     const ok = resp.ok;
 
     await supabase.from('sms_logs').insert({
       event_type: eventType || 'manual_test',
-      recipient_phone: recipientPhone,
+      recipient_phone: normalizedRecipientPhone,
       message_body: messageBody,
       provider: 'sasusync',
       provider_reference: data?.reference || data?.id || null,
