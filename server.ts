@@ -94,7 +94,7 @@ async function dispatchSasuSyncSms(
   }
 
   try {
-    const resp = await fetch(endpoint, {
+    let resp = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -106,6 +106,19 @@ async function dispatchSasuSyncSms(
         message: params.messageBody,
       }),
     });
+
+    if (resp.status === 405) {
+      const getUrl = new URL(endpoint);
+      getUrl.searchParams.set('to', params.recipientPhone);
+      getUrl.searchParams.set('sender', senderId);
+      getUrl.searchParams.set('message', params.messageBody);
+      getUrl.searchParams.set('apikey', apiKey);
+      resp = await fetch(getUrl.toString(), {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+    }
+
     const data = await resp.json().catch(() => ({}));
     const ok = resp.ok;
 
@@ -116,7 +129,7 @@ async function dispatchSasuSyncSms(
       provider: 'sasusync',
       provider_reference: data?.reference || data?.id || null,
       status: ok ? 'sent' : 'failed',
-      error_message: ok ? null : data?.message || `HTTP ${resp.status}`,
+      error_message: ok ? null : data?.message || data?.error || `HTTP ${resp.status}`,
       related_entity_type: params.relatedEntityType || null,
       related_entity_id: params.relatedEntityId || null,
     });
