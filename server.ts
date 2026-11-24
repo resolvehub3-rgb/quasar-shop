@@ -124,7 +124,14 @@ async function dispatchSasuSyncSms(
     }
 
     const data = await resp.json().catch(() => ({}));
-    const ok = resp.ok;
+    const providerFailed =
+      data &&
+      (data.success === false ||
+        data.delivered === false ||
+        data.status === false ||
+        /fail|error|invalid|rejected/i.test(String(data.status || data.code || data.result || '')) ||
+        Boolean(data.error));
+    const ok = resp.ok && !providerFailed;
 
     await admin.from('sms_logs').insert({
       event_type: params.eventType,
@@ -133,7 +140,9 @@ async function dispatchSasuSyncSms(
       provider: 'sasusync',
       provider_reference: data?.reference || data?.id || null,
       status: ok ? 'sent' : 'failed',
-      error_message: ok ? null : data?.message || data?.error || `HTTP ${resp.status}`,
+      error_message: ok
+        ? `provider_response: ${JSON.stringify(data).slice(0, 500)}`
+        : data?.message || data?.error || `HTTP ${resp.status}`,
       related_entity_type: params.relatedEntityType || null,
       related_entity_id: params.relatedEntityId || null,
     });

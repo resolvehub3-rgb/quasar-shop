@@ -795,7 +795,11 @@ export const OwnerSmsPage: React.FC = () => {
                 <div>
                   <p className="font-semibold">{l.event_type.replace('_', ' ')} → {l.recipient_phone}</p>
                   <p className="text-[#4B5563] mt-0.5">{l.message_body}</p>
-                  {l.error_message && <p className="text-[#E60000] mt-0.5">{l.error_message}</p>}
+                  {l.error_message && (
+                    <p className={l.status === 'sent' ? 'text-[#4B5563] mt-0.5' : 'text-[#E60000] mt-0.5'}>
+                      {l.error_message}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className="font-bold uppercase">{l.status}</span>
