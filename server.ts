@@ -103,10 +103,14 @@ async function dispatchSasuSyncSms(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
+        'X-API-Key': apiKey,
+        'X-API-KEY': apiKey,
       },
       body: JSON.stringify({
         to: recipientPhone,
         sender: senderId,
+        apikey: apiKey,
+        api_key: apiKey,
         message: params.messageBody,
       }),
     });
