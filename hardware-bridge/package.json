@@ -1,0 +1,13 @@
+{
+  "name": "qusarshop-hardware-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lightweight local hardware bridge for QusarShop POS (thermal printer + cash drawer).",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, XCircle, KeyRound, UserPlus, Send, Save, ShieldAlert, Loader2 } from 'lucide-react';
+import { Check, XCircle, KeyRound, UserPlus, Send, Save, ShieldAlert, Loader2, Cpu, Printer, Banknote, ScanBarcode } from 'lucide-react';
+import {
+  loadBridgeConfig,
+  saveBridgeConfig,
+  clearBridgeConfig,
+  checkBridgeHealth,
+  testPrint,
+  testDrawer,
+  type BridgeHealth,
+} from '../../lib/hardwareBridge';
 import { supabase } from '../../lib/supabaseClient';
 import { formatGHS } from '../../lib/posCalculations';
 import { PWAInstallButton } from '../../components/PWAInstallButton';
@@ -940,6 +949,265 @@ export const OwnerSettingsPage: React.FC<{ onSettingsUpdated?: () => void }> = (
       ) : (
         <p className="text-xs text-[#6B7280]">Sign in as the shop owner with a configured Supabase database to manage settings.</p>
       )}
+    </div>
+  );
+};
+
+export const OwnerHardwarePage: React.FC = () => {
+  const [cfg, setCfg] = useState(() => loadBridgeConfig());
+  const [baseUrl, setBaseUrl] = useState(cfg?.baseUrl || 'http://127.0.0.1:8787');
+  const [token, setToken] = useState(cfg?.token || '');
+  const [health, setHealth] = useState<BridgeHealth | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [manualReason, setManualReason] = useState('');
+
+  const refreshHealth = async () => {
+    if (!cfg) {
+      setHealth(null);
+      return;
+    }
+    const h = await checkBridgeHealth(cfg);
+    setHealth(h);
+  };
+
+  useEffect(() => {
+    refreshHealth();
+  }, [cfg]);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!baseUrl.trim() || !token.trim()) {
+      setMsg('Bridge URL and pairing token are required.');
+      return;
+    }
+    const next = { baseUrl: baseUrl.trim().replace(/\/+$/, ''), token: token.trim() };
+    saveBridgeConfig(next);
+    setCfg(next);
+    setMsg('Hardware bridge configuration saved.');
+  };
+
+  const handleClear = () => {
+    clearBridgeConfig();
+    setCfg(null);
+    setHealth(null);
+    setMsg('Hardware bridge configuration cleared.');
+  };
+
+  const handleTestPrint = async () => {
+    if (!cfg) return;
+    setTesting(true);
+    const r = await testPrint(cfg);
+    setMsg(r.ok ? 'Test receipt sent to printer.' : `Test print failed: ${r.error}`);
+    setTesting(false);
+  };
+
+  const handleTestDrawer = async () => {
+    if (!cfg) return;
+    setTesting(true);
+    const r = await testDrawer(cfg);
+    setMsg(r.ok ? 'Drawer kick command sent.' : `Drawer test failed: ${r.error}`);
+    setTesting(false);
+  };
+
+  const handleManualDrawerOpen = async () => {
+    if (!cfg) return;
+    if (!supabase) {
+      setMsg('Supabase not configured.');
+      return;
+    }
+    const { data: sess } = await supabase.auth.getSession();
+    const ownerId = sess.session?.user?.id;
+    if (!ownerId) {
+      setMsg('Owner authentication required.');
+      return;
+    }
+    const reason = manualReason.trim();
+    if (!reason) {
+      setMsg('A reason is required for manual drawer opening.');
+      return;
+    }
+    setTesting(true);
+    const r = await testDrawer(cfg);
+    // Audit log the manual opening attempt (server-side via supabase RLS as owner)
+    await supabase.from('audit_logs').insert({
+      actor_type: 'owner',
+      actor_id: ownerId,
+      actor_name: (sess.session?.user?.email as string) || 'Owner',
+      action: 'MANUAL_DRAWER_OPEN',
+      entity_type: 'hardware',
+      entity_id: null,
+      details: { reason, result: r.ok ? 'success' : 'failed', error: r.error || null },
+    });
+    setMsg(r.ok ? 'Manual drawer open triggered and audit-logged.' : `Manual drawer open failed: ${r.error}`);
+    setManualReason('');
+    setTesting(false);
+  };
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div>
+        <h1 className="font-display text-2xl font-bold text-[#1F2937]">POS Hardware</h1>
+        <p className="text-xs text-[#6B7280]">
+          Configure the local hardware bridge, thermal printer, cash drawer, and barcode scanner.
+        </p>
+      </div>
+
+      {msg && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">{msg}</div>}
+
+      <div className="rounded-xl bg-white border border-[#E5E7EB] p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Cpu className="h-5 w-5 text-[#E60000]" />
+          <h2 className="font-display text-sm font-bold">Local Hardware Bridge</h2>
+        </div>
+        <p className="text-xs text-[#6B7280]">
+          The bridge runs on the cashier's computer and is the only component that accesses the printer and drawer.
+          Status:{' '}
+          <strong>{cfg ? (health?.ok ? 'Connected' : 'Unreachable') : 'Not configured'}</strong>
+          {health?.message ? ` — ${health.message}` : ''}
+        </p>
+
+        <form onSubmit={handleSave} className="space-y-3 text-xs">
+          <div>
+            <label className="block font-semibold mb-1">Bridge Base URL</label>
+            <input
+              type="text"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="http://127.0.0.1:8787"
+              className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block font-semibold mb-1">Pairing Token</label>
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Paste the token printed by the bridge on first run"
+              className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="rounded-lg bg-[#E60000] px-4 py-2 text-xs font-semibold text-white">
+              Save Bridge Config
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-xs font-semibold"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={refreshHealth}
+              className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-xs font-semibold"
+            >
+              Re-check
+            </button>
+          </div>
+        </form>
+
+        {health && (
+          <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-xs space-y-1">
+            <p>Bridge version: {health.version || '—'}</p>
+            <p>Printer configured: {health.printerConfigured ? 'Yes' : 'No'}</p>
+            <p>Printer connected: {health.printerConnected ? 'Yes' : 'No'}</p>
+            <p>Drawer supported: {health.drawerSupported ? 'Yes' : 'No'}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl bg-white border border-[#E5E7EB] p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Printer className="h-5 w-5 text-[#E60000]" />
+          <h2 className="font-display text-sm font-bold">Thermal Printer</h2>
+        </div>
+        <p className="text-xs text-[#6B7280]">
+          Paper width is configured in Shop Settings. Use the bridge diagnostics to verify printing.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!cfg || testing}
+            onClick={handleTestPrint}
+            className="rounded-lg bg-[#E60000] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            Test Receipt Print
+          </button>
+          <button
+            type="button"
+            disabled={!cfg || testing}
+            onClick={handleTestDrawer}
+            className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-xs font-semibold disabled:opacity-50"
+          >
+            Test Drawer Kick
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-white border border-[#E5E7EB] p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Banknote className="h-5 w-5 text-[#E60000]" />
+          <h2 className="font-display text-sm font-bold">Cash Drawer</h2>
+        </div>
+        <p className="text-xs text-[#6B7280]">
+          The drawer is kicked through the printer's drawer-kick port after a completed sale that contains a cash
+          payment. Manual opening requires owner authorization and is audit-logged. Drawer status is reported as
+          unverified unless the bridge reports real status support.
+        </p>
+        <div className="space-y-2 pt-2 border-t border-[#E5E7EB]">
+          <label className="block text-xs font-semibold">Manual Open Reason (required)</label>
+          <input
+            type="text"
+            value={manualReason}
+            onChange={(e) => setManualReason(e.target.value)}
+            placeholder="e.g. Cash count / reconciliation"
+            className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={!cfg || testing}
+            onClick={handleManualDrawerOpen}
+            className="rounded-lg border border-[#E5E7EB] px-4 py-2 text-xs font-semibold disabled:opacity-50"
+          >
+            Manually Open Drawer (Owner Only)
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-white border border-[#E5E7EB] p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <ScanBarcode className="h-5 w-5 text-[#E60000]" />
+          <h2 className="font-display text-sm font-bold">Barcode Scanner</h2>
+        </div>
+        <p className="text-xs text-[#6B7280]">
+          Keyboard-wedge USB scanners are supported. The POS detects rapid keystroke bursts terminated by Enter and
+          looks up the barcode in the product database. Normal typing in input fields is never intercepted. The
+          browser cannot verify physical scanner connection; if scans do not appear, check the scanner's USB
+          connection and configured suffix.
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-white border border-[#E5E7EB] p-5 space-y-2">
+        <h2 className="font-display text-sm font-bold">Hardware Diagnostics</h2>
+        <p className="text-xs text-[#6B7280]">
+          1. Local hardware bridge availability — {cfg ? (health?.ok ? 'OK' : 'FAIL') : 'NOT CONFIGURED'}.
+        </p>
+        <p className="text-xs text-[#6B7280]">
+          2. Printer availability — {health?.printerConnected ? 'OK' : 'NOT VERIFIED'}.
+        </p>
+        <p className="text-xs text-[#6B7280]">
+          3. Test receipt printing — use "Test Receipt Print".
+        </p>
+        <p className="text-xs text-[#6B7280]">
+          4. Drawer kick capability — {health?.drawerSupported ? 'SUPPORTED' : 'NOT VERIFIED'}.
+        </p>
+        <p className="text-xs text-[#6B7280]">
+          5. Barcode scanner — keyboard-wedge mode; see instructions above.
+        </p>
+      </div>
     </div>
   );
 };

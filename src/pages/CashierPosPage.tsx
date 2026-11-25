@@ -35,6 +35,15 @@ import {
 import { useOnlineStatus } from '../components/PWAInstallButton';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { CameraBarcodeScannerModal } from '../components/CameraBarcodeScannerModal';
+import { DrawerReminder } from '../components/DrawerReminder';
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
+import {
+  loadBridgeConfig,
+  printReceipt,
+  kickDrawer,
+  checkBridgeHealth,
+  type BridgeHealth,
+} from '../lib/hardwareBridge';
 
 interface CartItem {
   key: string;
@@ -74,6 +83,22 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
   const [searchQuery, setSearchQuery] = useState('');
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const scanBufferRef = useRef('');
+  const scanTimerRef = useRef<number | null>(null);
+
+  // Hardware bridge
+  const [bridgeConfig] = useState(() => loadBridgeConfig());
+  const [bridgeHealth, setBridgeHealth] = useState<BridgeHealth | null>(null);
+  const [printingStatus, setPrintingStatus] = useState<string | null>(null);
+
+  // Drawer reminder
+  const [drawerReminder, setDrawerReminder] = useState<{
+    transactionRef: string;
+    openedAt: number;
+  } | null>(null);
+
+  // Idempotency guard for drawer kicks (survives refresh via sessionStorage)
+  const kickedTxRef = useRef<Set<string>>(new Set());
 
   // Cart & Discount
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -94,6 +119,9 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
     amount: number;
     phone: string;
     network: string;
+    saleId?: string;
+    clientTxRef?: string;
+    hasCash?: boolean;
   } | null>(null);
 
   // Post-sale Digital Receipt
@@ -180,105 +208,120 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
     }
   }, [session?.token]);
 
-  // Poll Moolre status while awaiting authorization
   useEffect(() => {
-    if (!pendingMomo) return;
-    if (['successful', 'failed', 'cancelled', 'expired'].includes(pendingMomo.status)) return;
-
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/payments/moolre/status/${encodeURIComponent(pendingMomo.paymentReference)}`);
-        const data = await res.json();
-        if (res.ok && data.payment) {
-          setPendingMomo((prev) =>
-            prev ? { ...prev, status: data.payment.status } : null
-          );
-          if (data.payment.status === 'successful') {
-            setCart([]);
-            setDiscountInput('0');
-            setCashTendered('');
-            setPaymentMode('cash');
-            if (data.receipt?.snapshot_json) {
-              setCompletedReceipt(data.receipt.snapshot_json);
-            }
-            setPendingMomo(null);
-            loadPosData();
-          }
-        }
-      } catch {
-        // Keep polling until expiry
+    try {
+      const raw = sessionStorage.getItem('qusarshop_kicked_tx_refs');
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) kickedTxRef.current = new Set(arr);
       }
-    }, 3000);
-
-    return () => clearInterval(timer);
-  }, [pendingMomo, loadPosData]);
-
-  const addProductToCart = useCallback((product: Product, conversionId: string | null = null) => {
-    setSaleError(null);
-    const conv = conversionId
-      ? product.product_unit_conversions?.find((c) => c.id === conversionId)
-      : null;
-
-    const unitName = conv ? conv.unit_name : product.measurement_units?.code || 'unit';
-    const conversionToBase = conv ? Number(conv.conversion_to_base) : 1;
-    const unitPrice = computeUnitPrice(
-      Number(product.selling_price),
-      conversionToBase,
-      conv?.selling_price
-    );
-    const allowDecimal = product.measurement_units?.allow_decimal ?? true;
-    const key = `${product.id}::${conversionId || 'base'}`;
-
-    const availableBaseStock = Number(product.stock_quantity) || 0;
-    setCart((prev) => {
-      const existing = prev.find((i) => i.key === key);
-      const nextQuantity = existing ? existing.quantity + 1 : 1;
-      const baseNeeded = nextQuantity * conversionToBase;
-      if (baseNeeded > availableBaseStock + 1e-9) {
-        setSaleError(`Out of stock: only ${availableBaseStock} ${product.measurement_units?.code || 'unit'} available.`);
-        return prev;
-      }
-      if (existing) {
-        return prev.map((i) => (i.key === key ? { ...i, quantity: i.quantity + 1 } : i));
-      }
-      return [
-        ...prev,
-        {
-          key,
-          product,
-          conversionId,
-          unitName,
-          conversionToBase,
-          unitPrice,
-          quantity: 1,
-          allowDecimal,
-        },
-      ];
-    });
+    } catch {
+      // ignore
+    }
   }, []);
 
-  const handleBarcodeOrSearchSubmit = useCallback(
-    (rawInput: string) => {
-      const term = rawInput.trim();
-      if (!term) return;
+  useEffect(() => {
+    if (!bridgeConfig) return;
+    let cancelled = false;
+    checkBridgeHealth(bridgeConfig).then((h) => {
+      if (!cancelled) setBridgeHealth(h);
+    });
+    const interval = window.setInterval(() => {
+      checkBridgeHealth(bridgeConfig).then((h) => {
+        if (!cancelled) setBridgeHealth(h);
+      });
+    }, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [bridgeConfig]);
 
-      // Exact barcode match first (product.barcode or product_barcodes)
-      for (const p of products) {
-        if (p.barcode && p.barcode.toLowerCase() === term.toLowerCase()) {
-          addProductToCart(p, null);
-          setSearchQuery('');
-          return;
+  const pendingMomoRef = useRef(pendingMomo);
+  pendingMomoRef.current = pendingMomo;
+
+  // Poll pending MoMo payment; only treat as confirmed when server says successful.
+  useEffect(() => {
+    if (!pendingMomo || !session) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/payments/moolre/status/${pendingMomo.paymentReference}`, {
+          headers: { Authorization: `Bearer ${session.token}` },
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        const status = data?.payment?.status;
+        setPendingMomo((prev) => (prev ? { ...prev, status: status || prev.status } : prev));
+        if (status === 'successful') {
+          if (data?.receipt?.snapshot_json) {
+            setCompletedReceipt(data.receipt.snapshot_json);
+          }
+          const pm = pendingMomoRef.current;
+          setPendingMomo(null);
+          setCart([]);
+          setDiscountInput('0');
+          setCashTendered('');
+          setPaymentMode('cash');
+          await loadPosData();
+          // Print receipt for confirmed sale.
+          const cfg2 = loadBridgeConfig();
+          if (cfg2 && data?.receipt?.snapshot_json) {
+            const r = data.receipt.snapshot_json as any;
+            printReceipt(cfg2, {
+              shopName: shopSettings?.shop_name || 'Provision Shop',
+              shopPhone: shopSettings?.phone,
+              shopAddress: shopSettings?.address,
+              receiptHeader: shopSettings?.receipt_header,
+              receiptFooter: shopSettings?.receipt_footer,
+              receiptNumber: r.receipt_number,
+              clientTxRef: r.client_tx_ref,
+              date: r.date,
+              cashierName: r.cashier_name,
+              paperWidth: shopSettings?.thermal_paper_width || '80mm',
+              items: r.items,
+              subtotal: r.subtotal,
+              discount: r.discount,
+              total: r.total,
+              payments: r.payments,
+              changeGiven: r.change_given,
+            });
+          }
+          // Drawer kick for split sales with cash component (idempotent).
+          if (pm?.hasCash && pm?.clientTxRef) {
+            const cfg = loadBridgeConfig();
+            if (cfg && pm?.clientTxRef && !kickedTxRef.current.has(pm.clientTxRef)) {
+              kickedTxRef.current.add(pm.clientTxRef);
+              try {
+                sessionStorage.setItem('qusarshop_kicked_tx_refs', JSON.stringify(Array.from(kickedTxRef.current)));
+              } catch {}
+              const kickRes = await kickDrawer(cfg);
+              if (kickRes.ok) {
+                setDrawerReminder({ transactionRef: pm.clientTxRef, openedAt: Date.now() });
+              }
+            }
+          }
+          // Print receipt
+          const cfg = loadBridgeConfig();
+          if (cfg && pendingMomo.saleId) {
+            // fetch receipt via pos-data? skip; rely on server receipt snapshot not available here
+          }
+        } else if (status === 'failed' || status === 'expired') {
+          setPendingMomo(null);
+          setSaleError(`Mobile Money payment ${status}.`);
         }
-        const alt = p.product_barcodes?.find((b) => b.barcode.toLowerCase() === term.toLowerCase());
-        if (alt) {
-          addProductToCart(p, alt.unit_conversion_id);
-          setSearchQuery('');
-          return;
-        }
+      } catch {
+        // ignore transient
       }
-    },
-    [products, addProductToCart]
-  );
+    };
+    const interval = window.setInterval(poll, 4000);
+    poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [pendingMomo?.paymentReference]);
+
 
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -338,6 +381,114 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
     }
   };
 
+  const addProductToCart = useCallback(
+    (product: Product, conversionId: string | null) => {
+      if (product.is_archived) {
+        setSaleError(`"${product.name}" is archived and cannot be sold.`);
+        return;
+      }
+      if (Number(product.stock_quantity) <= 0) {
+        setSaleError(`"${product.name}" is out of stock.`);
+        return;
+      }
+      if (!Number.isFinite(Number(product.selling_price)) || Number(product.selling_price) <= 0) {
+        setSaleError(`"${product.name}" has an invalid selling price.`);
+        return;
+      }
+
+      const conversions = product.product_unit_conversions?.filter((c) => c.is_sale_unit) || [];
+      const conv = conversionId ? conversions.find((c) => c.id === conversionId) : null;
+      const factor = conv ? Number(conv.conversion_to_base) : 1;
+      const unitPrice = conv
+        ? (conv.selling_price !== null && conv.selling_price !== undefined
+            ? Number(conv.selling_price)
+            : Number(product.selling_price) / factor)
+        : Number(product.selling_price);
+      const unitName = conv ? conv.unit_name : product.measurement_units?.code || 'unit';
+      const allowDecimal = conv
+        ? (product.measurement_units?.allow_decimal ?? true)
+        : (product.measurement_units?.allow_decimal ?? false);
+
+      setCart((prev) => {
+        const existing = prev.find(
+          (r) => r.product.id === product.id && r.conversionId === conversionId
+        );
+        if (existing) {
+          const nextQty = existing.quantity + 1;
+          const baseNeeded = nextQty * existing.conversionToBase;
+          if (baseNeeded > Number(product.stock_quantity) + 1e-9) {
+            setSaleError(`Out of stock: only ${product.stock_quantity} ${product.measurement_units?.code || 'unit'} available.`);
+            return prev;
+          }
+          return prev.map((r) =>
+            r.key === existing.key ? { ...r, quantity: nextQty } : r
+          );
+        }
+        const key = `${product.id}-${conversionId || 'base'}-${Date.now()}`;
+        return [
+          ...prev,
+          {
+            key,
+            product,
+            conversionId,
+            unitName,
+            conversionToBase: factor,
+            unitPrice,
+            quantity: 1,
+            allowDecimal,
+          },
+        ];
+      });
+      setSaleError(null);
+    },
+    []
+  );
+
+  const handleBarcodeOrSearchSubmit = useCallback(
+    (raw: string) => {
+      const code = raw.trim();
+      if (!code) return;
+
+      // Exact barcode match (product.barcode or product_barcodes)
+      const byBarcode = products.find((p) => {
+        if (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) return true;
+        return (p.product_barcodes || []).some(
+          (b) => b.barcode && b.barcode.toLowerCase() === code.toLowerCase()
+        );
+      });
+
+      if (byBarcode) {
+        // Resolve conversion from barcode alias if present
+        const alias = (byBarcode.product_barcodes || []).find(
+          (b) => b.barcode && b.barcode.toLowerCase() === code.toLowerCase()
+        );
+        addProductToCart(byBarcode, alias?.unit_conversion_id || null);
+        setSearchQuery('');
+        return;
+      }
+
+      // Otherwise treat as search: if exactly one match, add it; else just filter.
+      const matches = products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(code.toLowerCase()) ||
+          (p.sku && p.sku.toLowerCase().includes(code.toLowerCase()))
+      );
+      if (matches.length === 1) {
+        addProductToCart(matches[0], null);
+        setSearchQuery('');
+      } else {
+        setSearchQuery(code);
+      }
+    },
+    [products, addProductToCart]
+  );
+
+  useBarcodeScanner({
+    enabled: true,
+    onScan: handleBarcodeOrSearchSubmit,
+    canScan: () => Boolean(session?.activeShift) && activeTab === 'pos',
+  });
+
   const handleCompleteSale = async () => {
     if (!session || !session.activeShift) return;
     if (cart.length === 0) {
@@ -395,6 +546,21 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
       setPaymentMode('cash');
       setSaleError(null);
       setActiveTab('offline');
+
+      // Offline cash sale completed locally: kick drawer (idempotent) if cash component.
+      (async () => {
+        const cfg = loadBridgeConfig();
+        if (!cfg) return;
+        if (kickedTxRef.current.has(clientTxRef)) return;
+        kickedTxRef.current.add(clientTxRef);
+        try {
+          sessionStorage.setItem('qusarshop_kicked_tx_refs', JSON.stringify(Array.from(kickedTxRef.current)));
+        } catch {}
+        const kickRes = await kickDrawer(cfg);
+        if (kickRes.ok) {
+          setDrawerReminder({ transactionRef: clientTxRef, openedAt: Date.now() });
+        }
+      })();
       return;
     }
 
@@ -451,6 +617,9 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
           amount: momoNeeded,
           phone: momoPhone.trim(),
           network: momoNetwork,
+          saleId: saleData.saleResult.sale_id,
+          clientTxRef,
+          hasCash: cashNeeded > 0,
         });
       } else {
         // Cash-only sale completed immediately
@@ -462,6 +631,59 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
           setCompletedReceipt(saleData.receipt.snapshot_json);
         }
         await loadPosData();
+
+        // Determine if sale contains a cash component for drawer kick.
+        const saleResult = saleData.saleResult || {};
+        const hasCash = Number(saleResult.cash_amount ?? cashNeeded ?? 0) > 0;
+        const txRef = saleResult.client_tx_ref || clientTxRef;
+        const saleId = saleResult.sale_id;
+
+        // Trigger hardware side-effects asynchronously; never block the sale.
+        (async () => {
+          const cfg = loadBridgeConfig();
+          // Print receipt (only completed transactions)
+          if (cfg && saleData.receipt?.snapshot_json) {
+            const r = saleData.receipt.snapshot_json as any;
+            setPrintingStatus('Printing receipt...');
+            const printRes = await printReceipt(cfg, {
+              shopName: shopSettings?.shop_name || 'Provision Shop',
+              shopPhone: shopSettings?.phone,
+              shopAddress: shopSettings?.address,
+              receiptHeader: shopSettings?.receipt_header,
+              receiptFooter: shopSettings?.receipt_footer,
+              receiptNumber: r.receipt_number,
+              clientTxRef: r.client_tx_ref,
+              date: r.date,
+              cashierName: r.cashier_name,
+              paperWidth: shopSettings?.thermal_paper_width || '80mm',
+              items: r.items,
+              subtotal: r.subtotal,
+              discount: r.discount,
+              total: r.total,
+              payments: r.payments,
+              changeGiven: r.change_given,
+            });
+            setPrintingStatus(printRes.ok ? 'Receipt printed.' : `Print failed: ${printRes.error}`);
+            setTimeout(() => setPrintingStatus(null), 4000);
+          }
+          // Cash drawer kick (only if cash component, idempotent)
+          if (hasCash && cfg) {
+            if (!kickedTxRef.current.has(txRef)) {
+              kickedTxRef.current.add(txRef);
+              try {
+                sessionStorage.setItem('qusarshop_kicked_tx_refs', JSON.stringify(Array.from(kickedTxRef.current)));
+              } catch {
+                // ignore
+              }
+              const kickRes = await kickDrawer(cfg);
+              if (kickRes.ok) {
+                setDrawerReminder({ transactionRef: txRef, openedAt: Date.now() });
+              } else {
+                setSaleError(`Drawer kick failed: ${kickRes.error}`);
+              }
+            }
+          }
+        })();
       }
     } catch (err) {
       setSaleError(err instanceof Error ? err.message : 'Checkout error');
@@ -646,6 +868,12 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
           </button>
         </div>
       </header>
+
+      {printingStatus && (
+        <div className="fixed bottom-4 right-4 z-40 rounded-lg bg-[#1F2937] text-white px-4 py-2 text-xs shadow-lg">
+          {printingStatus}
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         {/* Charcoal POS Sidebar */}
@@ -1520,6 +1748,16 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
           shop={shopSettings}
           mode="cashier_post_sale"
           onClose={() => setCompletedReceipt(null)}
+        />
+      )}
+
+      {/* Drawer Reminder */}
+      {drawerReminder && (
+        <DrawerReminder
+          transactionRef={drawerReminder.transactionRef}
+          openedAt={drawerReminder.openedAt}
+          bridgeHealth={bridgeHealth}
+          onAcknowledge={() => setDrawerReminder(null)}
         />
       )}
 

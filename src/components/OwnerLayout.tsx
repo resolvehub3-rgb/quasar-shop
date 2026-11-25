@@ -15,6 +15,7 @@ import {
   Clock,
   MessageSquare,
   Settings,
+  Cpu,
   LogOut,
   Menu,
   X,
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
   { to: '/owner/cashiers', label: 'Cashiers', icon: UserCheck },
   { to: '/owner/shifts', label: 'Shifts', icon: Clock },
   { to: '/owner/sms', label: 'SMS Reports', icon: MessageSquare },
+  { to: '/owner/hardware', label: 'POS Hardware', icon: Cpu },
   { to: '/owner/settings', label: 'Settings', icon: Settings },
 ];
 

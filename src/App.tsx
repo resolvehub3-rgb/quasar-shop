@@ -22,6 +22,7 @@ import {
   OwnerSettingsPage,
   OwnerShiftsPage,
   OwnerSmsPage,
+  OwnerHardwarePage,
 } from './pages/owner/OwnerAdminOperationsPage';
 import { OfflineIndicator } from './components/PWAInstallButton';
 
@@ -169,6 +170,7 @@ export default function App() {
           <Route path="cashiers" element={<OwnerCashiersPage />} />
           <Route path="shifts" element={<OwnerShiftsPage />} />
           <Route path="sms" element={<OwnerSmsPage />} />
+          <Route path="hardware" element={<OwnerHardwarePage />} />
           <Route path="settings" element={<OwnerSettingsPage onSettingsUpdated={refreshOwnerState} />} />
         </Route>
 
