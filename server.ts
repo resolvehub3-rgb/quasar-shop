@@ -105,9 +105,7 @@ async function dispatchSasuSyncSms(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
         'X-API-Key': apiKey,
-        'X-API-KEY': apiKey,
       },
       body: JSON.stringify({
         sender: senderId,
@@ -124,7 +122,7 @@ async function dispatchSasuSyncSms(
       getUrl.searchParams.set('apikey', apiKey);
       resp = await fetch(getUrl.toString(), {
         method: 'GET',
-        headers: { Authorization: `Bearer ${apiKey}` },
+        headers: { 'X-API-Key': apiKey },
       });
     }
 
@@ -133,7 +131,7 @@ async function dispatchSasuSyncSms(
 
     await admin.from('sms_logs').insert({
       event_type: params.eventType,
-      recipient_phone: params.recipientPhone,
+      recipient_phone: recipientPhone,
       message_body: params.messageBody,
       provider: 'sasusync',
       provider_reference: data?.reference || data?.id || null,
