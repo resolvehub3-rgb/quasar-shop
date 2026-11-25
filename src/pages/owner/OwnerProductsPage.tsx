@@ -51,6 +51,8 @@ export const OwnerProductsPage: React.FC = () => {
   const [adjType, setAdjType] = useState<'stock_adjustment' | 'damaged_stock' | 'expired_stock' | 'opening_stock'>('stock_adjustment');
   const [adjDelta, setAdjDelta] = useState('');
   const [adjReason, setAdjReason] = useState('');
+  const [adjUnitName, setAdjUnitName] = useState('');
+  const [adjUnitFactor, setAdjUnitFactor] = useState(1);
 
   const loadAll = useCallback(async () => {
     if (!supabase) {
@@ -270,12 +272,13 @@ export const OwnerProductsPage: React.FC = () => {
     if (!ownerId) return;
 
     const delta = Number(adjDelta);
+    const baseDelta = delta * adjUnitFactor;
     const { error: rpcErr } = await supabase.rpc('fn_record_stock_adjustment', {
       p_product_id: adjModalProduct.id,
       p_owner_id: ownerId,
       p_movement_type: adjType,
-      p_quantity_delta: adjType === 'damaged_stock' || adjType === 'expired_stock' ? -Math.abs(delta) : delta,
-      p_description: adjReason.trim(),
+      p_quantity_delta: adjType === 'damaged_stock' || adjType === 'expired_stock' ? -Math.abs(baseDelta) : baseDelta,
+      p_description: `${adjReason.trim()} [entered ${delta} ${adjUnitName}]`,
     });
     if (rpcErr) {
       setError(rpcErr.message);
@@ -434,7 +437,13 @@ export const OwnerProductsPage: React.FC = () => {
                       <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => setAdjModalProduct(p)}
+                          onClick={() => {
+                            setAdjModalProduct(p);
+                            setAdjUnitName(p.measurement_units?.code || 'unit');
+                            setAdjUnitFactor(1);
+                            setAdjDelta('');
+                            setAdjReason('');
+                          }}
                           className="inline-flex items-center gap-1 text-[#1F2937] hover:text-[#E60000] font-semibold cursor-pointer"
                         >
                           <SlidersHorizontal className="h-3 w-3" /> Adjust
@@ -755,6 +764,27 @@ export const OwnerProductsPage: React.FC = () => {
             </div>
             <form onSubmit={handleStockAdjustment} className="space-y-3 text-xs">
               <div>
+                <label className="block font-semibold mb-1">Unit</label>
+                <select
+                  value={`${adjUnitName}::${adjUnitFactor}`}
+                  onChange={(e) => {
+                    const [u, f] = e.target.value.split('::');
+                    setAdjUnitName(u);
+                    setAdjUnitFactor(Number(f));
+                  }}
+                  className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 bg-white"
+                >
+                  <option value={`${adjModalProduct?.measurement_units?.code || 'unit'}::1`}>
+                    {adjModalProduct?.measurement_units?.code || 'Base'} (x1)
+                  </option>
+                  {(adjModalProduct?.product_unit_conversions || []).map((c) => (
+                    <option key={c.id} value={`${c.unit_name}::${c.conversion_to_base}`}>
+                      {c.unit_name} (x{c.conversion_to_base})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block font-semibold mb-1">Movement Classification</label>
                 <select
                   value={adjType}
@@ -769,7 +799,7 @@ export const OwnerProductsPage: React.FC = () => {
               </div>
               <div>
                 <label className="block font-semibold mb-1">
-                  Quantity ({adjModalProduct.measurement_units?.code})
+                  Quantity ({adjUnitName})
                 </label>
                 <input
                   type="number"
