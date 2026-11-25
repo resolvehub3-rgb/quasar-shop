@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const endpoint = Deno.env.get('SASUSYNC_API_ENDPOINT');
-  const apiKey = Deno.env.get('SASUSYNC_API_KEY');
+  const apiKey = (Deno.env.get('SASUSYNC_API_KEY') || '').trim();
   const senderId = Deno.env.get('SASUSYNC_SENDER_ID') || 'ShopPOS';
 
   const { eventType, recipientPhone, messageBody, relatedEntityType, relatedEntityId } = await req.json();

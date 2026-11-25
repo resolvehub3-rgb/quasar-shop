@@ -71,7 +71,7 @@ async function dispatchSasuSyncSms(
   const endpoint = rawEndpoint.replace(/\/+$/, '').endsWith('/api/v1/send')
     ? rawEndpoint.replace(/\/+$/, '')
     : `${rawEndpoint.replace(/\/+$/, '')}/api/v1/send`;
-  const apiKey = process.env.SASUSYNC_API_KEY;
+  const apiKey = (process.env.SASUSYNC_API_KEY || '').trim();
   const senderId = process.env.SASUSYNC_SENDER_ID || 'ShopPOS';
 
   // Normalize local Ghana numbers (0XXXXXXXXX) to international format (233XXXXXXXXX).
