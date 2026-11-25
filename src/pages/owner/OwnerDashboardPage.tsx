@@ -219,7 +219,11 @@ export const OwnerDashboardPage: React.FC = () => {
     let expiringCount = 0;
 
     for (const p of products) {
-      const status = evaluateStockAlert(Number(p.stock_quantity), Number(p.min_stock_level), p.expiry_date);
+      const status = evaluateStockAlert(
+        Number(p.stock_quantity ?? 0),
+        p.min_stock_level === null || p.min_stock_level === undefined ? 5 : Number(p.min_stock_level),
+        p.expiry_date
+      );
       if (status.stockLevel === 'low_stock' || status.stockLevel === 'out_of_stock') {
         lowStockCount += 1;
         alerts.push({
