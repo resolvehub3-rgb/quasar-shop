@@ -229,8 +229,15 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
     const allowDecimal = product.measurement_units?.allow_decimal ?? true;
     const key = `${product.id}::${conversionId || 'base'}`;
 
+    const availableBaseStock = Number(product.stock_quantity) || 0;
     setCart((prev) => {
       const existing = prev.find((i) => i.key === key);
+      const nextQuantity = existing ? existing.quantity + 1 : 1;
+      const baseNeeded = nextQuantity * conversionToBase;
+      if (baseNeeded > availableBaseStock + 1e-9) {
+        setSaleError(`Out of stock: only ${availableBaseStock} ${product.measurement_units?.code || 'unit'} available.`);
+        return prev;
+      }
       if (existing) {
         return prev.map((i) => (i.key === key ? { ...i, quantity: i.quantity + 1 } : i));
       }
@@ -1023,20 +1030,33 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
                                 onChange={(e) => {
                                   const val = Number(e.target.value);
                                   if (!Number.isFinite(val) || val <= 0) return;
-                                  setCart((prev) =>
-                                    prev.map((r) => (r.key === item.key ? { ...r, quantity: val } : r))
-                                  );
+                                   const baseNeeded = val * item.conversionToBase;
+                                   const availableBaseStock = Number(item.product.stock_quantity) || 0;
+                                   if (baseNeeded > availableBaseStock + 1e-9) {
+                                     setSaleError(`Out of stock: only ${availableBaseStock} ${item.product.measurement_units?.code || 'unit'} available.`);
+                                     return;
+                                   }
+                                   setCart((prev) =>
+                                     prev.map((r) => (r.key === item.key ? { ...r, quantity: val } : r))
+                                   );
                                 }}
                                 className="w-16 rounded-lg border border-[#E5E7EB] py-1 text-center text-sm font-semibold tabular-nums"
                               />
                               <button
                                 type="button"
                                 aria-label={`Increase quantity of ${item.product.name}`}
-                                onClick={() =>
+                                onClick={() => {
+                                  const nextQuantity = item.quantity + 1;
+                                  const baseNeeded = nextQuantity * item.conversionToBase;
+                                  const availableBaseStock = Number(item.product.stock_quantity) || 0;
+                                  if (baseNeeded > availableBaseStock + 1e-9) {
+                                    setSaleError(`Out of stock: only ${availableBaseStock} ${item.product.measurement_units?.code || 'unit'} available.`);
+                                    return;
+                                  }
                                   setCart((prev) =>
                                     prev.map((r) => (r.key === item.key ? { ...r, quantity: r.quantity + 1 } : r))
-                                  )
-                                }
+                                  );
+                                }}
                                 className="h-8 w-8 rounded-lg border border-[#E5E7EB] flex items-center justify-center hover:bg-[#F3F4F6] cursor-pointer"
                               >
                                 <Plus className="h-3.5 w-3.5" />
