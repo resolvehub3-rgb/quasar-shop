@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ to: normalizedRecipientPhone, sender: senderId, message: messageBody }),
     });
     const data = await resp.json().catch(() => ({}));
-    const ok = resp.ok;
+    const ok = resp.ok && data?.success === true;
 
     await supabase.from('sms_logs').insert({
       event_type: eventType || 'manual_test',

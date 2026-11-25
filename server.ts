@@ -67,7 +67,10 @@ async function dispatchSasuSyncSms(
     relatedEntityId?: string;
   }
 ): Promise<{ delivered: boolean; status: string; error?: string }> {
-  const endpoint = process.env.SASUSYNC_API_ENDPOINT;
+  const rawEndpoint = process.env.SASUSYNC_API_ENDPOINT || '';
+  const endpoint = rawEndpoint.replace(/\/+$/, '').endsWith('/api/v1/send')
+    ? rawEndpoint.replace(/\/+$/, '')
+    : `${rawEndpoint.replace(/\/+$/, '')}/api/v1/send`;
   const apiKey = process.env.SASUSYNC_API_KEY;
   const senderId = process.env.SASUSYNC_SENDER_ID || 'ShopPOS';
 
@@ -107,10 +110,8 @@ async function dispatchSasuSyncSms(
         'X-API-KEY': apiKey,
       },
       body: JSON.stringify({
-        to: recipientPhone,
         sender: senderId,
-        apikey: apiKey,
-        api_key: apiKey,
+        recipients: [recipientPhone],
         message: params.messageBody,
       }),
     });
@@ -128,14 +129,7 @@ async function dispatchSasuSyncSms(
     }
 
     const data = await resp.json().catch(() => ({}));
-    const providerFailed =
-      data &&
-      (data.success === false ||
-        data.delivered === false ||
-        data.status === false ||
-        /fail|error|invalid|rejected/i.test(String(data.status || data.code || data.result || '')) ||
-        Boolean(data.error));
-    const ok = resp.ok && !providerFailed;
+    const ok = resp.ok && data?.success === true;
 
     await admin.from('sms_logs').insert({
       event_type: params.eventType,
