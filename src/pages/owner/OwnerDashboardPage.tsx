@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Clock,
   Truck,
+  RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { formatGHS } from '../../lib/posCalculations';
@@ -332,18 +333,32 @@ export const OwnerDashboardPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5">
-          <Calendar className="h-4 w-4 text-[#6B7280]" />
-          <select
-            aria-label="Dashboard date range"
-            value={range}
-            onChange={(e) => setRange(e.target.value as DateRange)}
-            className="text-xs font-semibold text-[#1F2937] bg-transparent focus:outline-none cursor-pointer"
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              fetchDashboard();
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#1F2937] hover:bg-[#F3F4F6] cursor-pointer"
+            aria-label="Refresh dashboard"
           >
-            <option value="today">Today</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-          </select>
+            <RefreshCw className={`h-4 w-4 text-[#6B7280] ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <div className="flex items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5">
+            <Calendar className="h-4 w-4 text-[#6B7280]" />
+            <select
+              aria-label="Dashboard date range"
+              value={range}
+              onChange={(e) => setRange(e.target.value as DateRange)}
+              className="text-xs font-semibold text-[#1F2937] bg-transparent focus:outline-none cursor-pointer"
+            >
+              <option value="today">Today</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+            </select>
+          </div>
         </div>
       </div>
 
