@@ -7,6 +7,9 @@ import {
   checkBridgeHealth,
   testPrint,
   testDrawer,
+  getPairingStatus,
+  pairWithBridge,
+  DEFAULT_BRIDGE_URL,
   type BridgeHealth,
 } from '../../lib/hardwareBridge';
 import { supabase } from '../../lib/supabaseClient';
@@ -955,8 +958,9 @@ export const OwnerSettingsPage: React.FC<{ onSettingsUpdated?: () => void }> = (
 
 export const OwnerHardwarePage: React.FC = () => {
   const [cfg, setCfg] = useState(() => loadBridgeConfig());
-  const [baseUrl, setBaseUrl] = useState(cfg?.baseUrl || 'http://127.0.0.1:8787');
-  const [token, setToken] = useState(cfg?.token || '');
+  const [baseUrl, setBaseUrl] = useState(cfg?.baseUrl || 'http://127.0.0.1:8765');
+  const [pairingCode, setPairingCode] = useState('');
+  const [pairingStatus, setPairingStatus] = useState<any>(null);
   const [health, setHealth] = useState<BridgeHealth | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
@@ -965,32 +969,46 @@ export const OwnerHardwarePage: React.FC = () => {
   const refreshHealth = async () => {
     if (!cfg) {
       setHealth(null);
+      setPairingStatus(null);
       return;
     }
     const h = await checkBridgeHealth(cfg);
     setHealth(h);
+    const ps = await getPairingStatus(cfg.baseUrl);
+    setPairingStatus(ps);
   };
 
   useEffect(() => {
     refreshHealth();
   }, [cfg]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handlePair = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!baseUrl.trim() || !token.trim()) {
-      setMsg('Bridge URL and pairing token are required.');
+    const url = baseUrl.trim().replace(/\/+$/, '') || DEFAULT_BRIDGE_URL;
+    if (!pairingCode.trim()) {
+      setMsg('Enter the pairing code shown by the bridge management utility.');
       return;
     }
-    const next = { baseUrl: baseUrl.trim().replace(/\/+$/, ''), token: token.trim() };
-    saveBridgeConfig(next);
-    setCfg(next);
-    setMsg('Hardware bridge configuration saved.');
+    setTesting(true);
+    const r = await pairWithBridge(url, pairingCode.trim());
+    if (r.ok && r.token) {
+      const next = { baseUrl: url, token: r.token };
+      saveBridgeConfig(next);
+      setCfg(next);
+      setPairingCode('');
+      setMsg('Pairing successful. Bridge configured.');
+      await refreshHealth();
+    } else {
+      setMsg(`Pairing failed: ${r.error}`);
+    }
+    setTesting(false);
   };
 
   const handleClear = () => {
     clearBridgeConfig();
     setCfg(null);
     setHealth(null);
+    setPairingStatus(null);
     setMsg('Hardware bridge configuration cleared.');
   };
 
@@ -1067,30 +1085,33 @@ export const OwnerHardwarePage: React.FC = () => {
           {health?.message ? ` — ${health.message}` : ''}
         </p>
 
-        <form onSubmit={handleSave} className="space-y-3 text-xs">
+        <form onSubmit={handlePair} className="space-y-3 text-xs">
           <div>
             <label className="block font-semibold mb-1">Bridge Base URL</label>
             <input
               type="text"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="http://127.0.0.1:8787"
+              placeholder="http://127.0.0.1:8765"
               className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label className="block font-semibold mb-1">Pairing Token</label>
+            <label className="block font-semibold mb-1">Pairing Code</label>
             <input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Paste the token printed by the bridge on first run"
-              className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+              type="text"
+              value={pairingCode}
+              onChange={(e) => setPairingCode(e.target.value.toUpperCase())}
+              placeholder="Enter code from bridge management utility"
+              className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm font-mono"
             />
+            <p className="text-[11px] text-[#6B7280] mt-1">
+              Run the bridge management utility (or read pairing-code.txt) to obtain the one-time code.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="submit" className="rounded-lg bg-[#E60000] px-4 py-2 text-xs font-semibold text-white">
-              Save Bridge Config
+            <button type="submit" disabled={testing} className="rounded-lg bg-[#E60000] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
+              {testing ? 'Pairing...' : 'Pair with Bridge'}
             </button>
             <button
               type="button"
@@ -1112,9 +1133,13 @@ export const OwnerHardwarePage: React.FC = () => {
         {health && (
           <div className="rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] p-3 text-xs space-y-1">
             <p>Bridge version: {health.version || '—'}</p>
+            <p>Paired: {health.ok ? (pairingStatus?.paired ? 'Yes' : 'No') : 'Unknown'}</p>
             <p>Printer configured: {health.printerConfigured ? 'Yes' : 'No'}</p>
             <p>Printer connected: {health.printerConnected ? 'Yes' : 'No'}</p>
             <p>Drawer supported: {health.drawerSupported ? 'Yes' : 'No'}</p>
+            {pairingStatus && !pairingStatus.paired && (
+              <p>Pairing code available: {pairingStatus.pairingAvailable ? 'Yes' : 'No'} (attempts left: {pairingStatus.attemptsRemaining})</p>
+            )}
           </div>
         )}
       </div>

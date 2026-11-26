@@ -2,12 +2,31 @@
   "name": "qusarshop-hardware-bridge",
   "version": "1.0.0",
   "private": true,
-  "description": "Lightweight local hardware bridge for QusarShop POS (thermal printer + cash drawer).",
-  "main": "bridge.js",
+  "description": "QusarShop Windows Local Hardware Bridge (thermal printer + cash drawer).",
+  "main": "dist/index.js",
+  "bin": {
+    "qusarshop-hardware-bridge": "dist/index.js"
+  },
   "scripts": {
-    "start": "node bridge.js"
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --test tests/**/*.test.js",
+    "install:service": "node dist/index.js install-service",
+    "uninstall:service": "node dist/index.js uninstall-service"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@primno/dpapi": "^2.0.1",
+    "node-windows": "1.0.0-beta.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@yao-pkg/pkg": "^6.26.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
   }
 }

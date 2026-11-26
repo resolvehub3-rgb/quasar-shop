@@ -12,6 +12,8 @@
     "build": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "preview": "vite preview",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test:bridge": "pnpm --dir hardware-bridge test",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },

@@ -12,3 +12,14 @@ coverage/
 .vercel
 bridge.config.json
 hardware-bridge/bridge.config.json
+hardware-bridge/node_modules/
+hardware-bridge/dist/
+*.exe
+*.sed
+*.txt
+admin-check*.ps1
+svc-*.ps1
+installer-output/
+installer-staging/
+ministage/
+run-install.ps1

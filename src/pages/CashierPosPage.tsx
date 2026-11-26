@@ -44,6 +44,7 @@ import {
   checkBridgeHealth,
   type BridgeHealth,
 } from '../lib/hardwareBridge';
+import { shouldOpenDrawer, drawerOperationId, printOperationId } from '../lib/drawerPolicy';
 
 interface CartItem {
   key: string;
@@ -268,7 +269,7 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
           const cfg2 = loadBridgeConfig();
           if (cfg2 && data?.receipt?.snapshot_json) {
             const r = data.receipt.snapshot_json as any;
-            printReceipt(cfg2, {
+            await printReceipt(cfg2, {
               shopName: shopSettings?.shop_name || 'Provision Shop',
               shopPhone: shopSettings?.phone,
               shopAddress: shopSettings?.address,
@@ -285,7 +286,7 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
               total: r.total,
               payments: r.payments,
               changeGiven: r.change_given,
-            });
+            }, printOperationId(r.client_tx_ref || pm?.clientTxRef || ''));
           }
           // Drawer kick for split sales with cash component (idempotent).
           if (pm?.hasCash && pm?.clientTxRef) {
@@ -295,16 +296,11 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
               try {
                 sessionStorage.setItem('qusarshop_kicked_tx_refs', JSON.stringify(Array.from(kickedTxRef.current)));
               } catch {}
-              const kickRes = await kickDrawer(cfg);
+              const kickRes = await kickDrawer(cfg, drawerOperationId(pm.clientTxRef));
               if (kickRes.ok) {
                 setDrawerReminder({ transactionRef: pm.clientTxRef, openedAt: Date.now() });
               }
             }
-          }
-          // Print receipt
-          const cfg = loadBridgeConfig();
-          if (cfg && pendingMomo.saleId) {
-            // fetch receipt via pos-data? skip; rely on server receipt snapshot not available here
           }
         } else if (status === 'failed' || status === 'expired') {
           setPendingMomo(null);
@@ -556,7 +552,7 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
         try {
           sessionStorage.setItem('qusarshop_kicked_tx_refs', JSON.stringify(Array.from(kickedTxRef.current)));
         } catch {}
-        const kickRes = await kickDrawer(cfg);
+        const kickRes = await kickDrawer(cfg, drawerOperationId(clientTxRef));
         if (kickRes.ok) {
           setDrawerReminder({ transactionRef: clientTxRef, openedAt: Date.now() });
         }
@@ -619,7 +615,7 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
           network: momoNetwork,
           saleId: saleData.saleResult.sale_id,
           clientTxRef,
-          hasCash: cashNeeded > 0,
+          hasCash: shouldOpenDrawer({ cashAmount: cashNeeded }),
         });
       } else {
         // Cash-only sale completed immediately
@@ -634,9 +630,11 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
 
         // Determine if sale contains a cash component for drawer kick.
         const saleResult = saleData.saleResult || {};
-        const hasCash = Number(saleResult.cash_amount ?? cashNeeded ?? 0) > 0;
+        const hasCash = shouldOpenDrawer({ cashAmount: saleResult.cash_amount ?? cashNeeded });
         const txRef = saleResult.client_tx_ref || clientTxRef;
         const saleId = saleResult.sale_id;
+        const printKey = printOperationId(txRef);
+        const kickKey = drawerOperationId(txRef);
 
         // Trigger hardware side-effects asynchronously; never block the sale.
         (async () => {
@@ -662,8 +660,14 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
               total: r.total,
               payments: r.payments,
               changeGiven: r.change_given,
-            });
-            setPrintingStatus(printRes.ok ? 'Receipt printed.' : `Print failed: ${printRes.error}`);
+            }, printKey);
+            setPrintingStatus(
+              printRes.ok
+                ? printRes.duplicate
+                  ? 'Receipt already printed.'
+                  : 'Receipt printed.'
+                : `Print failed: ${printRes.error}`
+            );
             setTimeout(() => setPrintingStatus(null), 4000);
           }
           // Cash drawer kick (only if cash component, idempotent)
@@ -675,7 +679,7 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
               } catch {
                 // ignore
               }
-              const kickRes = await kickDrawer(cfg);
+              const kickRes = await kickDrawer(cfg, kickKey);
               if (kickRes.ok) {
                 setDrawerReminder({ transactionRef: txRef, openedAt: Date.now() });
               } else {

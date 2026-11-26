@@ -21,6 +21,7 @@ export interface BridgeConfig {
 }
 
 const STORAGE_KEY = 'qusarshop_hardware_bridge_config_v1';
+export const DEFAULT_BRIDGE_URL = 'http://127.0.0.1:8765';
 
 export function loadBridgeConfig(): BridgeConfig | null {
   try {
@@ -96,27 +97,35 @@ export interface PrintReceiptPayload {
   changeGiven: number;
 }
 
-export async function printReceipt(cfg: BridgeConfig, payload: PrintReceiptPayload): Promise<{ ok: boolean; error?: string }> {
+export async function printReceipt(
+  cfg: BridgeConfig,
+  payload: PrintReceiptPayload,
+  idempotencyKey?: string
+): Promise<{ ok: boolean; error?: string; duplicate?: boolean }> {
   try {
-    const res = await bridgeFetch(cfg, '/print', { method: 'POST', body: JSON.stringify(payload) });
+    const body = JSON.stringify(idempotencyKey ? { ...payload, idempotencyKey } : payload);
+    const res = await bridgeFetch(cfg, '/print', { method: 'POST', body });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data?.ok) {
       return { ok: false, error: data?.error || `HTTP ${res.status}` };
     }
-    return { ok: true };
+    return { ok: true, duplicate: Boolean(data?.duplicate) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Print request failed' };
   }
 }
 
-export async function kickDrawer(cfg: BridgeConfig): Promise<{ ok: boolean; error?: string }> {
+export async function kickDrawer(cfg: BridgeConfig, operationId?: string): Promise<{ ok: boolean; error?: string; duplicate?: boolean }> {
   try {
-    const res = await bridgeFetch(cfg, '/drawer/kick', { method: 'POST', body: JSON.stringify({}) });
+    const res = await bridgeFetch(cfg, '/drawer/kick', {
+      method: 'POST',
+      body: JSON.stringify(operationId ? { operationId } : {}),
+    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data?.ok) {
       return { ok: false, error: data?.error || `HTTP ${res.status}` };
     }
-    return { ok: true };
+    return { ok: true, duplicate: Boolean(data?.duplicate) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Drawer kick failed' };
   }
@@ -141,5 +150,49 @@ export async function testDrawer(cfg: BridgeConfig): Promise<{ ok: boolean; erro
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Test drawer failed' };
+  }
+}
+
+export interface PairingStatus {
+  paired: boolean;
+  pairingAvailable: boolean;
+  expiresAt: number | null;
+  attemptsRemaining: number;
+  lockedUntil: number | null;
+}
+
+export async function getPairingStatus(baseUrl: string): Promise<PairingStatus | null> {
+  try {
+    const url = baseUrl.replace(/\/+$/, '') + '/pairing/status';
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      paired: Boolean(data?.paired),
+      pairingAvailable: Boolean(data?.pairingAvailable),
+      expiresAt: data?.expiresAt ?? null,
+      attemptsRemaining: Number(data?.attemptsRemaining ?? 0),
+      lockedUntil: data?.lockedUntil ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function pairWithBridge(baseUrl: string, code: string): Promise<{ ok: boolean; token?: string; error?: string }> {
+  try {
+    const url = baseUrl.replace(/\/+$/, '') + '/pairing/initiate';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok || !data?.token) {
+      return { ok: false, error: data?.error || `HTTP ${res.status}` };
+    }
+    return { ok: true, token: String(data.token) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Pairing failed' };
   }
 }
