@@ -12,11 +12,11 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+        includeAssets: ['icon.svg', 'apple-touch-icon.png', 'favicon-32x32.png', 'favicon-16x16.png'],
         manifest: {
           id: '/',
-          name: 'Qusar-Shop',
-          short_name: 'Qusar-Shop',
+          name: 'QusarShop',
+          short_name: 'QusarShop',
           description:
             'Single-shop provision inventory, POS, Mobile Money, SMS, and accounting management system.',
           theme_color: '#E60000',
