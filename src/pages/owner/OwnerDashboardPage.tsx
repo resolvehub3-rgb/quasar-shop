@@ -18,58 +18,10 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import { formatGHS } from '../../lib/posCalculations';
 import { evaluateStockAlert } from '../../lib/inventoryMath';
+import { AnimatedAreaChart } from '../../components/AnimatedAreaChart';
 import type { Product, SaleRecord, ExpenseRecord, CashierShift, Supplier } from '../../types/database';
 
 type DateRange = 'today' | '7d' | '30d';
-
-const MiniSparkline: React.FC<{ data: number[]; delay?: number }> = ({ data, delay = 0 }) => {
-  const max = Math.max(1, ...data);
-  const n = data.length || 1;
-  const points = data
-    .map((v, i) => {
-      const x = n > 1 ? (i / (n - 1)) * 100 : 50;
-      const y = 36 - (v / max) * 28;
-      return `${x},${y}`;
-    })
-    .join(' ');
-  return (
-    <svg viewBox="0 0 100 40" className="w-full h-12 overflow-visible" preserveAspectRatio="none">
-      <polyline
-        fill="none"
-        stroke="rgba(255,255,255,0.25)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-      />
-      <polyline
-        className="animate-draw-line"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-        style={{ strokeDasharray: 1000, strokeDashoffset: 1000, animationDelay: `${delay}ms` }}
-      />
-      {data.map((v, i) => {
-        const x = n > 1 ? (i / (n - 1)) * 100 : 50;
-        const y = 36 - (v / max) * 28;
-        return (
-          <circle
-            key={i}
-            cx={x}
-            cy={y}
-            r="2.2"
-            fill="white"
-            className="animate-pop-in"
-            style={{ animationDelay: `${delay + i * 60}ms`, transformOrigin: `${x}px ${y}px` }}
-          />
-        );
-      })}
-    </svg>
-  );
-};
 
 export const OwnerDashboardPage: React.FC = () => {
   const [range, setRange] = useState<DateRange>('today');
@@ -403,7 +355,7 @@ export const OwnerDashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="relative mt-3 h-12">
-            <MiniSparkline data={metrics.chartDays.map((d) => d.sales)} delay={0} />
+            <AnimatedAreaChart data={metrics.chartDays.map((d) => d.sales)} delay={0} />
           </div>
         </div>
 
@@ -425,7 +377,7 @@ export const OwnerDashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="relative mt-3 h-12">
-            <MiniSparkline data={metrics.chartDays.map((d) => d.cash)} delay={80} />
+            <AnimatedAreaChart data={metrics.chartDays.map((d) => d.cash)} delay={80} />
           </div>
         </div>
 
@@ -447,7 +399,7 @@ export const OwnerDashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="relative mt-3 h-12">
-            <MiniSparkline data={metrics.chartDays.map((d) => d.momo)} delay={160} />
+            <AnimatedAreaChart data={metrics.chartDays.map((d) => d.momo)} delay={160} />
           </div>
         </div>
 
@@ -469,7 +421,7 @@ export const OwnerDashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="relative mt-3 h-12">
-            <MiniSparkline data={metrics.chartDays.map((d) => d.expenses)} delay={240} />
+            <AnimatedAreaChart data={metrics.chartDays.map((d) => d.expenses)} delay={240} />
           </div>
         </div>
       </div>
