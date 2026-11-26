@@ -25,9 +25,11 @@ import {
   OwnerHardwarePage,
 } from './pages/owner/OwnerAdminOperationsPage';
 import { OfflineIndicator } from './components/PWAInstallButton';
+import { SplashScreen } from './components/SplashScreen';
 
 export default function App() {
   const [ownerAuthChecked, setOwnerAuthChecked] = useState(false);
+  const [splashVisible, setSplashVisible] = useState(true);
   const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(false);
   const [ownerName, setOwnerName] = useState('Shop Owner');
   const [shopName, setShopName] = useState('Provision Shop');
@@ -99,6 +101,13 @@ export default function App() {
     };
   }, [refreshOwnerState]);
 
+  useEffect(() => {
+    if (!ownerAuthChecked) return;
+    const minDelay = 600;
+    const t = window.setTimeout(() => setSplashVisible(false), minDelay);
+    return () => window.clearTimeout(t);
+  }, [ownerAuthChecked]);
+
   const handleOwnerLogout = async () => {
     if (supabase) {
       await supabase.auth.signOut();
@@ -107,7 +116,9 @@ export default function App() {
   };
 
   return (
-    <BrowserRouter>
+    <>
+      <SplashScreen visible={splashVisible} />
+      <BrowserRouter>
       <OfflineIndicator />
       <Routes>
         <Route
@@ -177,5 +188,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </>
   );
 }

@@ -140,6 +140,8 @@ function buildReceipt(payload) {
   push(escposInit());
   push(escposAlign(1));
   push(escposBold(true));
+  push(escposText('QUSAR VENTURES'));
+  push(escposNewline());
   push(escposText(payload.shopName || 'Shop'));
   push(escposNewline());
   push(escposBold(false));

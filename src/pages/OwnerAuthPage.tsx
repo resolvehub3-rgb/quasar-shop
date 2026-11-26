@@ -156,12 +156,11 @@ export const OwnerAuthPage: React.FC<OwnerAuthPageProps> = ({ onOwnerAuthenticat
       {/* Top Bar */}
       <header className="relative z-10 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] px-3 sm:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="h-9 w-9 shrink-0 rounded-lg bg-[#E60000] flex items-center justify-center text-white">
-            <ShoppingBag className="h-5 w-5" />
-          </div>
-          <span className="font-display text-sm sm:text-lg font-bold text-[#1F2937] truncate">
-            Qusar Ventures
-          </span>
+          <img
+            src="/branding/qusar-ventures-logo.png"
+            alt="QUSAR VENTURES"
+            className="h-9 w-auto shrink-0 object-contain"
+          />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <PWAInstallButton />

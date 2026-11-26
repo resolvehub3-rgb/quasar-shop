@@ -833,7 +833,11 @@ export const CashierPosPage: React.FC<CashierPosPageProps> = ({ session, onSessi
       {/* Red POS Header matching reference */}
       <header className="bg-[#E60000] text-white px-4 lg:px-6 h-14 flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <ShoppingBag className="h-6 w-6 shrink-0" />
+          <img
+            src="/branding/qusar-ventures-logo.png"
+            alt="QUSAR VENTURES"
+            className="h-8 w-auto shrink-0 object-contain bg-white rounded-md px-1"
+          />
           <div className="min-w-0">
             <p className="font-display text-sm sm:text-base font-bold leading-tight truncate">
               {shopSettings?.shop_name || 'Provision Shop'} POS

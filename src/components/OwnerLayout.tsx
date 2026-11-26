@@ -68,9 +68,11 @@ export const OwnerLayout: React.FC<OwnerLayoutProps> = ({
       {/* Red Brand Header matching reference */}
       <div className="bg-[#E60000] px-5 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15">
-            <ShoppingBag className="h-5 w-5 text-white" />
-          </div>
+          <img
+            src="/branding/qusar-ventures-logo.png"
+            alt="QUSAR VENTURES"
+            className="h-9 w-auto shrink-0 object-contain bg-white rounded-md px-1"
+          />
           <div className="min-w-0">
             <p className="font-display text-sm font-bold leading-tight truncate">{shopName}</p>
             <p className="text-[11px] text-white/85 truncate">{tagline}</p>

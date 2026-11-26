@@ -66,6 +66,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             className={`printable-receipt ${paperWidth === '58mm' ? 'paper-58mm max-w-[240px]' : 'paper-80mm max-w-[320px]'} w-full rounded-lg border border-[#E5E7EB] bg-white p-4 text-xs text-[#1F2937] shadow-sm`}
           >
             <div className="text-center border-b border-dashed border-[#D1D5DB] pb-3">
+              <img
+                src="/branding/qusar-ventures-logo.png"
+                alt="QUSAR VENTURES"
+                className="mx-auto mb-2 h-10 w-auto object-contain"
+              />
               <p className="text-sm font-bold uppercase tracking-wide">
                 {shop?.shop_name || 'Provision Shop'}
               </p>

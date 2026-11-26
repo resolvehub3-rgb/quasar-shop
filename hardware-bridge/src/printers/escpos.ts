@@ -37,6 +37,8 @@ export function buildReceipt(payload: ReceiptPayload): Buffer {
   push(escposInit());
   push(escposAlign(1));
   push(escposBold(true));
+  push(escposText('QUSAR VENTURES'));
+  push(escposNewline());
   push(escposText(payload.shopName || 'Shop'));
   push(escposNewline());
   push(escposBold(false));
